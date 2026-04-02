@@ -1,71 +1,84 @@
-import React, { useEffect } from "react";
 import { Stack } from "expo-router";
-import { HapticProvider } from "../contexts/HapticContext";
+import { StatusBar } from "expo-status-bar";
+import { useEffect } from "react";
+import * as SplashScreen from "expo-splash-screen";
 import { useFonts } from "expo-font";
-import { setStatusBarHidden } from "expo-status-bar";
-import {
-    InvertColorsProvider,
-    useInvertColors,
-} from "@/contexts/InvertColorsContext";
-import { DisplayModeProvider } from "@/contexts/DisplayModeContext";
-import * as SystemUI from "expo-system-ui";
-import * as NavigationBar from 'expo-navigation-bar';
-import * as SplashScreen from 'expo-splash-screen';
+import { View, StyleSheet } from "react-native";
+import { InvertColorsProvider, useInvertColors } from "@/contexts/InvertColorsContext";
+import { HapticProvider } from "@/contexts/HapticContext";
+import { PlayerProvider } from "@/contexts/PlayerContext";
+import { MusicProvider } from "@/contexts/MusicContext";
+import { MiniPlayer } from "@/components/MiniPlayer";
 
+SplashScreen.preventAutoHideAsync();
 
-function RootNavigation() {
-    const { invertColors } = useInvertColors();
+function AppShell() {
+  const { invertColors } = useInvertColors();
+  const bg = invertColors ? "#ffffff" : "#000000";
 
-    useEffect(() => {
-        SystemUI.setBackgroundColorAsync(invertColors ? "white" : "black");
-        NavigationBar.setVisibilityAsync("hidden");
-    }, [invertColors]);
-
-    return (
-        <Stack
-            screenOptions={{
-                headerShown: false,
-                animation: "none",
-                contentStyle: {
-                    backgroundColor: invertColors ? "white" : "black",
-                },
-            }}
-        >
-            <Stack.Screen name="(tabs)" />
-            <Stack.Screen name="settings/customise" />
-            <Stack.Screen name="settings/customise-interface" />
-            <Stack.Screen name="settings/display-mode" />
-            <Stack.Screen name="confirm" />
-        </Stack>
-    );
+  return (
+    <View style={[styles.root, { backgroundColor: bg }]}>
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          animation: "none",
+          contentStyle: { backgroundColor: "transparent" },
+        }}
+      >
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen
+          name="artist/[artistId]"
+          options={{
+            presentation: "transparentModal",
+            animation: "slide_from_right",
+            gestureEnabled: false,
+            cardOverlayEnabled: false,
+          }}
+        />
+        <Stack.Screen
+          name="album/[albumId]"
+          options={{
+            presentation: "transparentModal",
+            animation: "slide_from_right",
+            gestureEnabled: false,
+            cardOverlayEnabled: false,
+          }}
+        />
+        <Stack.Screen
+          name="nowplaying"
+          options={{
+            presentation: "transparentModal",
+            animation: "slide_from_bottom",
+            gestureEnabled: false,
+          }}
+        />
+      </Stack>
+      <MiniPlayer />
+    </View>
+  );
 }
 
 export default function RootLayout() {
-    const [fontsLoaded, fontError] = useFonts({
-        "PublicSans-Regular": require("../assets/fonts/PublicSans-Regular.ttf"),
-    });
+  const [loaded] = useFonts({});
 
-    useEffect(() => {
-        setStatusBarHidden(true, "none");
-    }, []);
+  useEffect(() => {
+    if (loaded) SplashScreen.hideAsync();
+  }, [loaded]);
 
-    useEffect(() => {
-        if (fontsLoaded || fontError) {
-            SplashScreen.hideAsync();
-        }
-    }, [fontsLoaded, fontError]);
-
-    if (!fontsLoaded && !fontError) {
-        return null;
-    }
-
-    return (
-        <InvertColorsProvider>
-            <DisplayModeProvider>
-                <HapticProvider>
-                    <RootNavigation />
-                </HapticProvider>
-            </DisplayModeProvider>
-        </InvertColorsProvider>
-    );
+  return (
+    <InvertColorsProvider>
+      <HapticProvider>
+        <PlayerProvider>
+          <MusicProvider>
+            <StatusBar translucent style="auto" />
+            {loaded && <AppShell />}
+          </MusicProvider>
+        </PlayerProvider>
+      </HapticProvider>
+    </InvertColorsProvider>
+  );
 }
+
+const styles = StyleSheet.create({
+  root: { flex: 1 },
+});
