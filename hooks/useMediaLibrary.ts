@@ -11,8 +11,8 @@ import { parseBuffer, selectCover } from "music-metadata";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Track, Album, Artist } from "@/types/music";
 
-const CACHE_KEY = "library_cache_v9";
-const ART_CACHE_KEY = "library_art_cache_v4";
+const CACHE_KEY = "library_cache_v10";
+const ART_CACHE_KEY = "library_art_cache_v5";
 const CACHE_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 365;
 const ART_DIR = (cacheDirectory ?? "") + "album-art/";
 const MB_USER_AGENT = "LightMusic/1.0 (lightmusic@example.com)";
@@ -35,8 +35,6 @@ interface CachedLibrary {
   assetCount: number;
   assetModTimes?: Record<string, number>;
 }
-
-// ─── Helpers ───────────────────────────────────────────────────────────────
 
 function normalise(str: string) {
   return str.trim().toLowerCase();
@@ -136,69 +134,32 @@ async function artFileExists(albumId: string): Promise<string | null> {
 
 async function fetchMusicBrainzArt(artist: string, album: string): Promise<string | null> {
   try {
-    // Strategy 1: strict query — exact artist + release name
-    // Strategy 2: looser query — just release name (catches "Artist - Album" mismatches)
-    // Strategy 3: strip "(Single)", "- Single" etc from album title and retry
     const cleanAlbum = album
       .replace(/\s*[-–]\s*single$/i, "")
       .replace(/\s*\(single\)$/i, "")
       .replace(/\s*\(ep\)$/i, "")
       .trim();
 
-    const queries = [
-      // Most specific first
-      `artist:"${artist}" release:"${album}"`,
-      `artist:"${artist}" release:"${cleanAlbum}"`,
-      // Looser — just release name, more likely to match
-      `release:"${cleanAlbum}"`,
-    ];
+    const q = `artist:"${artist}" release:"${cleanAlbum}"`;
+    const res = await fetch(
+      `https://musicbrainz.org/ws/2/release/?query=${encodeURIComponent(q)}&fmt=json&limit=5`,
+      { headers: { "User-Agent": MB_USER_AGENT } }
+    );
+    if (!res.ok) return null;
 
-    for (const q of queries) {
+    const data = await res.json();
+    const releases: any[] = data.releases ?? [];
+    if (releases.length === 0) return null;
+
+    for (const release of releases) {
+      const url = `https://coverartarchive.org/release/${release.id}/front-500`;
       try {
-        const res = await fetch(
-          `https://musicbrainz.org/ws/2/release/?query=${encodeURIComponent(q)}&fmt=json&limit=10`,
-          { headers: { "User-Agent": MB_USER_AGENT } }
-        );
-        if (!res.ok) continue;
-        const data = await res.json();
-        const releases: any[] = data.releases ?? [];
-
-        // Score releases — prefer ones with matching artist
-        const scored = releases.map((r: any) => {
-          const creditNames: string[] = (r["artist-credit"] ?? [])
-            .map((c: any) => c.artist?.name?.toLowerCase() ?? "");
-          const artistMatch = creditNames.some((n) =>
-            n.includes(artist.toLowerCase()) || artist.toLowerCase().includes(n)
-          );
-          return { release: r, score: artistMatch ? 2 : 1 };
+        const check = await fetch(url, {
+          method: "HEAD",
+          headers: { "User-Agent": MB_USER_AGENT },
+          redirect: "follow",
         });
-        scored.sort((a, b) => b.score - a.score);
-
-        for (const { release } of scored) {
-          try {
-            // Fetch the CAA index directly — more reliable than HEAD on redirect
-            const caaRes = await fetch(
-              `https://coverartarchive.org/release/${release.id}`,
-              { headers: { "User-Agent": MB_USER_AGENT } }
-            );
-            if (!caaRes.ok) continue;
-            const caaData = await caaRes.json();
-            const images: any[] = caaData.images ?? [];
-
-            // Find front cover specifically
-            const front = images.find((img) =>
-              img.types?.includes("Front") || img.front === true
-            ) ?? images[0];
-
-            if (front) {
-              // Use the 500px thumbnail URL — always available, fast to load
-              const thumb = front.thumbnails?.["500"] ??
-                front.thumbnails?.large ??
-                front.image;
-              if (thumb) return thumb;
-            }
-          } catch {}
-        }
+        if (check.ok) return url;
       } catch {}
     }
     return null;
@@ -219,7 +180,6 @@ async function readMetadata(uri: string, filename: string): Promise<{
 }> {
   const fallback = parseFilename(filename);
   try {
-    // Full file read — most reliable across MP3/M4A/FLAC
     const base64 = await readAsStringAsync(uri, {
       encoding: "base64" as any,
     });
@@ -324,10 +284,10 @@ function buildLibrary(tracks: Track[]): { albums: Album[]; artists: Artist[] } {
     });
   }
 
-    // Remove unknown artist — catches podcasts, tones, system sounds
-    for (const [key, artist] of artistMap.entries()) {
-      if (isUnknown(artist.name)) artistMap.delete(key);
-    }
+  // Remove unknown artists — catches podcasts, tones, system sounds
+  for (const [key, artist] of artistMap.entries()) {
+    if (isUnknown(artist.name)) artistMap.delete(key);
+  }
 
   const sortedArtists = Array.from(artistMap.values()).sort((a, b) => {
     if (isUnknown(a.name)) return 1;
@@ -407,8 +367,7 @@ export function useMediaLibrary() {
     if (!silent) setState((s) => ({ ...s, loading: true, scanProgress: 0, error: null }));
 
     try {
-      // Scan ALL audio files — no folder filter
-      // Light Phone stores music in Downloads/Persisted/Music which MediaLibrary indexes correctly
+      // Scan all audio files
       let assets: MediaLibrary.Asset[] = [];
       let after: string | undefined;
       let hasMore = true;
@@ -428,22 +387,18 @@ export function useMediaLibrary() {
 
       await ensureArtDir();
       const artCache = new Map<string, string | null>();
-      const mbAttempted = new Set<string>();
 
-      // Build lookup of existing cached tracks for incremental scan
       const cachedTrackMap = new Map<string, Track>();
       if (existingCache?.tracks) {
         for (const t of existingCache.tracks) cachedTrackMap.set(t.id, t);
       }
       const cachedModTimes = existingCache?.assetModTimes ?? {};
 
-      // Pre-load art cache
       const savedArtMap = await loadArtCache();
       for (const [albumId, artPath] of Object.entries(savedArtMap)) {
         artCache.set(albumId, artPath);
       }
 
-      // Split into cached (skip re-read) vs new/changed
       const newAssets: MediaLibrary.Asset[] = [];
       const cachedAssets: MediaLibrary.Asset[] = [];
 
@@ -451,7 +406,6 @@ export function useMediaLibrary() {
         const modTime = (asset as any).modificationTime ?? 0;
         const prevModTime = cachedModTimes[asset.id];
         const hasCachedTrack = cachedTrackMap.has(asset.id);
-
         if (hasCachedTrack && prevModTime && prevModTime === modTime) {
           cachedAssets.push(asset);
         } else {
@@ -459,7 +413,6 @@ export function useMediaLibrary() {
         }
       }
 
-      // Reuse cached tracks for unchanged files
       const tracks: Track[] = [];
       for (const asset of cachedAssets) {
         const cached = cachedTrackMap.get(asset.id)!;
@@ -467,7 +420,7 @@ export function useMediaLibrary() {
         tracks.push({ ...cached, albumArt: resolvedArt });
       }
 
-      // Read metadata for new/changed files concurrently
+      // ── Phase 1: Metadata only — fast, concurrent, no network ─────────────
       if (newAssets.length > 0) {
         let processed = 0;
 
@@ -477,40 +430,22 @@ export function useMediaLibrary() {
           const meta = await readMetadata(asset.uri, asset.filename);
           const aKey = albumKey(meta.artist, meta.album);
 
-if (!artCache.has(aKey)) {
-  const existing = await artFileExists(aKey);
-  if (existing) {
-    // Already cached on disk — use immediately
-    artCache.set(aKey, existing);
-  } else if (!isUnknown(meta.artist) && !isUnknown(meta.album)) {
-    // Try MusicBrainz first — more reliable than embedded art on Light Phone
-    const mbUrl = await fetchMusicBrainzArt(meta.artist, meta.album);
-    if (mbUrl) {
-      artCache.set(aKey, mbUrl);
-    } else if (meta.albumArtBase64) {
-      // Fall back to embedded art if MusicBrainz has nothing
-      try {
-        const filePath = await saveArtFile(aKey, meta.albumArtBase64);
-        artCache.set(aKey, filePath);
-      } catch {
-        artCache.set(aKey, null);
-      }
-    } else {
-      artCache.set(aKey, null);
-    }
-    await delay(MB_RATE_LIMIT_MS);
-  } else if (meta.albumArtBase64) {
-    // Unknown artist/album — just use embedded art
-    try {
-      const filePath = await saveArtFile(aKey, meta.albumArtBase64);
-      artCache.set(aKey, filePath);
-    } catch {
-      artCache.set(aKey, null);
-    }
-  } else {
-    artCache.set(aKey, null);
-  }
-}
+          // Disk cache only — no network calls in phase 1
+          if (!artCache.has(aKey)) {
+            const existing = await artFileExists(aKey);
+            if (existing) {
+              artCache.set(aKey, existing);
+            } else if (meta.albumArtBase64) {
+              try {
+                const filePath = await saveArtFile(aKey, meta.albumArtBase64);
+                artCache.set(aKey, filePath);
+              } catch {
+                artCache.set(aKey, null);
+              }
+            } else {
+              artCache.set(aKey, null);
+            }
+          }
 
           tracks.push({
             id: asset.id,
@@ -540,31 +475,62 @@ if (!artCache.has(aKey)) {
 
       if (cancelled.current) return;
 
-      // Apply final art to all tracks
-      for (const track of tracks) {
-        track.albumArt = artCache.get(track.albumId) ?? null;
-      }
-
-      const sortedTracks = [...tracks].sort((a, b) => a.title.localeCompare(b.title));
-      const { albums, artists } = buildLibrary(tracks);
-
+      // ── Show library immediately after phase 1 ────────────────────────────
       const newModTimes: Record<string, number> = {};
       for (const asset of assets) {
         newModTimes[asset.id] = (asset as any).modificationTime ?? 0;
       }
 
-      await saveCache(sortedTracks, assets.length, newModTimes);
-      await saveArtCache(sortedTracks);
-
+      const sortedTracksPhase1 = [...tracks].sort((a, b) => a.title.localeCompare(b.title));
+      const lib1 = buildLibrary(tracks);
+      await saveCache(sortedTracksPhase1, assets.length, newModTimes);
+      await saveArtCache(sortedTracksPhase1);
       setState({
-        tracks: sortedTracks,
-        albums,
-        artists,
+        tracks: sortedTracksPhase1,
+        albums: lib1.albums,
+        artists: lib1.artists,
         loading: false,
         scanProgress: 1,
         error: null,
         permissionGranted: true,
       });
+
+      // ── Phase 2: MusicBrainz art in background ────────────────────────────
+      // Library is already visible — art loads in progressively per album
+      const albumsMissingArt = new Map<string, { artist: string; album: string }>();
+      for (const track of tracks) {
+        if (
+          !artCache.get(track.albumId) &&
+          !isUnknown(track.artist) &&
+          !isUnknown(track.album)
+        ) {
+          albumsMissingArt.set(track.albumId, { artist: track.artist, album: track.album });
+        }
+      }
+
+      for (const [aKey, { artist, album }] of albumsMissingArt) {
+        if (cancelled.current) break;
+
+        const mbUrl = await fetchMusicBrainzArt(artist, album);
+        if (mbUrl) {
+          artCache.set(aKey, mbUrl);
+          for (const track of tracks) {
+            if (track.albumId === aKey) track.albumArt = mbUrl;
+          }
+          // Push update so art appears as each album resolves
+          const sortedTracks = [...tracks].sort((a, b) => a.title.localeCompare(b.title));
+          const { albums, artists } = buildLibrary(tracks);
+          setState((s) => ({ ...s, tracks: sortedTracks, albums, artists }));
+        }
+
+        await delay(MB_RATE_LIMIT_MS);
+      }
+
+      // Save final art cache once background fetches complete
+      if (albumsMissingArt.size > 0) {
+        await saveArtCache(tracks);
+      }
+
     } catch (e: any) {
       setState((s) => ({
         ...s,
