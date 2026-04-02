@@ -11,21 +11,13 @@ import { parseBuffer, selectCover } from "music-metadata";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Track, Album, Artist } from "@/types/music";
 
-// Bump to force rescan with optimized code
-const CACHE_KEY = "library_cache_v5";
-const ART_CACHE_KEY = "library_art_cache_v3";
+const CACHE_KEY = "library_cache_v9";
+const ART_CACHE_KEY = "library_art_cache_v4";
 const CACHE_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 365;
 const ART_DIR = (cacheDirectory ?? "") + "album-art/";
 const MB_USER_AGENT = "LightMusic/1.0 (lightmusic@example.com)";
 const MB_RATE_LIMIT_MS = 1100;
-
-// How many files to read concurrently — too high causes I/O contention
 const CONCURRENCY = 4;
-
-// Max bytes to read per file for metadata
-// ID3 tags are at the start of MP3s, MP4 atoms at start of M4As
-// 256KB covers virtually all embedded artwork + tags
-const MAX_READ_BYTES = 256 * 1024;
 
 interface ScanState {
   tracks: Track[];
@@ -41,7 +33,6 @@ interface CachedLibrary {
   tracks: Track[];
   timestamp: number;
   assetCount: number;
-  // Map of assetId -> modification time for incremental scan
   assetModTimes?: Record<string, number>;
 }
 
@@ -93,27 +84,23 @@ function getMimeType(filename: string): string {
 
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-// Run async tasks with limited concurrency
 async function pLimit<T>(
   tasks: (() => Promise<T>)[],
   concurrency: number,
-  onProgress?: (done: number, total: number) => void
 ): Promise<T[]> {
   const results: T[] = new Array(tasks.length);
   let index = 0;
-  let done = 0;
 
   async function worker() {
     while (index < tasks.length) {
       const i = index++;
       results[i] = await tasks[i]();
-      done++;
-      onProgress?.(done, tasks.length);
     }
   }
 
-  const workers = Array.from({ length: Math.min(concurrency, tasks.length) }, worker);
-  await Promise.all(workers);
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, tasks.length) }, worker)
+  );
   return results;
 }
 
@@ -149,22 +136,68 @@ async function artFileExists(albumId: string): Promise<string | null> {
 
 async function fetchMusicBrainzArt(artist: string, album: string): Promise<string | null> {
   try {
-    const query = encodeURIComponent(`artist:"${artist}" release:"${album}"`);
-    const res = await fetch(
-      `https://musicbrainz.org/ws/2/release/?query=${query}&fmt=json&limit=5`,
-      { headers: { "User-Agent": MB_USER_AGENT } }
-    );
-    if (!res.ok) return null;
-    const data = await res.json();
-    const releases: any[] = data.releases ?? [];
-    for (const release of releases) {
+    // Strategy 1: strict query — exact artist + release name
+    // Strategy 2: looser query — just release name (catches "Artist - Album" mismatches)
+    // Strategy 3: strip "(Single)", "- Single" etc from album title and retry
+    const cleanAlbum = album
+      .replace(/\s*[-–]\s*single$/i, "")
+      .replace(/\s*\(single\)$/i, "")
+      .replace(/\s*\(ep\)$/i, "")
+      .trim();
+
+    const queries = [
+      // Most specific first
+      `artist:"${artist}" release:"${album}"`,
+      `artist:"${artist}" release:"${cleanAlbum}"`,
+      // Looser — just release name, more likely to match
+      `release:"${cleanAlbum}"`,
+    ];
+
+    for (const q of queries) {
       try {
-        const artRes = await fetch(
-          `https://coverartarchive.org/release/${release.id}/front`,
-          { method: "HEAD", headers: { "User-Agent": MB_USER_AGENT } }
+        const res = await fetch(
+          `https://musicbrainz.org/ws/2/release/?query=${encodeURIComponent(q)}&fmt=json&limit=10`,
+          { headers: { "User-Agent": MB_USER_AGENT } }
         );
-        if (artRes.ok || artRes.status === 307 || artRes.status === 302) {
-          return `https://coverartarchive.org/release/${release.id}/front-500`;
+        if (!res.ok) continue;
+        const data = await res.json();
+        const releases: any[] = data.releases ?? [];
+
+        // Score releases — prefer ones with matching artist
+        const scored = releases.map((r: any) => {
+          const creditNames: string[] = (r["artist-credit"] ?? [])
+            .map((c: any) => c.artist?.name?.toLowerCase() ?? "");
+          const artistMatch = creditNames.some((n) =>
+            n.includes(artist.toLowerCase()) || artist.toLowerCase().includes(n)
+          );
+          return { release: r, score: artistMatch ? 2 : 1 };
+        });
+        scored.sort((a, b) => b.score - a.score);
+
+        for (const { release } of scored) {
+          try {
+            // Fetch the CAA index directly — more reliable than HEAD on redirect
+            const caaRes = await fetch(
+              `https://coverartarchive.org/release/${release.id}`,
+              { headers: { "User-Agent": MB_USER_AGENT } }
+            );
+            if (!caaRes.ok) continue;
+            const caaData = await caaRes.json();
+            const images: any[] = caaData.images ?? [];
+
+            // Find front cover specifically
+            const front = images.find((img) =>
+              img.types?.includes("Front") || img.front === true
+            ) ?? images[0];
+
+            if (front) {
+              // Use the 500px thumbnail URL — always available, fast to load
+              const thumb = front.thumbnails?.["500"] ??
+                front.thumbnails?.large ??
+                front.image;
+              if (thumb) return thumb;
+            }
+          } catch {}
         }
       } catch {}
     }
@@ -186,29 +219,20 @@ async function readMetadata(uri: string, filename: string): Promise<{
 }> {
   const fallback = parseFilename(filename);
   try {
-    // Only read first 256KB — enough for tags and embedded art thumbnail
-    // This is the key optimization — avoids reading multi-MB audio data
+    // Full file read — most reliable across MP3/M4A/FLAC
     const base64 = await readAsStringAsync(uri, {
       encoding: "base64" as any,
-      length: MAX_READ_BYTES,
-      position: 0,
-    } as any);
+    });
 
-    // Decode base64 to binary more efficiently using Uint8Array directly
     const binaryStr = atob(base64);
     const buffer = new Uint8Array(binaryStr.length);
     for (let i = 0; i < binaryStr.length; i++) {
       buffer[i] = binaryStr.charCodeAt(i);
     }
 
-    // Tell music-metadata to stop parsing after tags — don't parse audio frames
     const metadata = await parseBuffer(buffer, {
       mimeType: getMimeType(filename),
       size: buffer.length,
-    }, {
-      skipPostHeaders: true,    // skip scanning past the tag headers
-      skipCovers: false,        // we DO want covers
-      duration: false,          // don't calculate duration (we have it from MediaLibrary)
     });
 
     const { common } = metadata;
@@ -271,7 +295,6 @@ function buildLibrary(tracks: Track[]): { albums: Album[]; artists: Artist[] } {
       if (b.trackNumber) return 1;
       return a.title.localeCompare(b.title);
     });
-    // Propagate resolved art to all tracks on album
     if (alb.albumArt) {
       for (const t of alb.tracks) t.albumArt = alb.albumArt;
     }
@@ -280,7 +303,12 @@ function buildLibrary(tracks: Track[]): { albums: Album[]; artists: Artist[] } {
   const artistMap = new Map<string, Artist>();
   for (const alb of albumMap.values()) {
     if (!artistMap.has(alb.artistId)) {
-      artistMap.set(alb.artistId, { id: alb.artistId, name: alb.artist, albums: [], trackCount: 0 });
+      artistMap.set(alb.artistId, {
+        id: alb.artistId,
+        name: alb.artist,
+        albums: [],
+        trackCount: 0,
+      });
     }
     const art = artistMap.get(alb.artistId)!;
     art.albums.push(alb);
@@ -295,6 +323,11 @@ function buildLibrary(tracks: Track[]): { albums: Album[]; artists: Artist[] } {
       return a.title.localeCompare(b.title);
     });
   }
+
+    // Remove unknown artist — catches podcasts, tones, system sounds
+    for (const [key, artist] of artistMap.entries()) {
+      if (isUnknown(artist.name)) artistMap.delete(key);
+    }
 
   const sortedArtists = Array.from(artistMap.values()).sort((a, b) => {
     if (isUnknown(a.name)) return 1;
@@ -338,7 +371,11 @@ export function useMediaLibrary() {
     } catch { return null; }
   }, []);
 
-  const saveCache = useCallback(async (tracks: Track[], assetCount: number, assetModTimes: Record<string, number>) => {
+  const saveCache = useCallback(async (
+    tracks: Track[],
+    assetCount: number,
+    assetModTimes: Record<string, number>
+  ) => {
     try {
       const cache: CachedLibrary = { tracks, timestamp: Date.now(), assetCount, assetModTimes };
       await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(cache));
@@ -370,10 +407,8 @@ export function useMediaLibrary() {
     if (!silent) setState((s) => ({ ...s, loading: true, scanProgress: 0, error: null }));
 
     try {
-      // Get Music folder only
-      const allAlbums = await MediaLibrary.getAlbumsAsync();
-      const musicFolder = allAlbums.find((a) => a.title === "Music" || a.title === "music");
-
+      // Scan ALL audio files — no folder filter
+      // Light Phone stores music in Downloads/Persisted/Music which MediaLibrary indexes correctly
       let assets: MediaLibrary.Asset[] = [];
       let after: string | undefined;
       let hasMore = true;
@@ -383,7 +418,6 @@ export function useMediaLibrary() {
           first: 300,
           after,
           sortBy: MediaLibrary.SortBy.default,
-          album: musicFolder ?? undefined,
         });
         assets = [...assets, ...page.assets];
         hasMore = page.hasNextPage;
@@ -403,13 +437,13 @@ export function useMediaLibrary() {
       }
       const cachedModTimes = existingCache?.assetModTimes ?? {};
 
-      // Load existing art cache into artCache map
+      // Pre-load art cache
       const savedArtMap = await loadArtCache();
       for (const [albumId, artPath] of Object.entries(savedArtMap)) {
         artCache.set(albumId, artPath);
       }
 
-      // Separate assets into: already cached (skip metadata read) vs new/changed
+      // Split into cached (skip re-read) vs new/changed
       const newAssets: MediaLibrary.Asset[] = [];
       const cachedAssets: MediaLibrary.Asset[] = [];
 
@@ -429,12 +463,11 @@ export function useMediaLibrary() {
       const tracks: Track[] = [];
       for (const asset of cachedAssets) {
         const cached = cachedTrackMap.get(asset.id)!;
-        // Apply latest art from art cache
         const resolvedArt = artCache.get(cached.albumId) ?? cached.albumArt ?? null;
         tracks.push({ ...cached, albumArt: resolvedArt });
       }
 
-      // Read metadata only for new/changed files — concurrently
+      // Read metadata for new/changed files concurrently
       if (newAssets.length > 0) {
         let processed = 0;
 
@@ -444,22 +477,40 @@ export function useMediaLibrary() {
           const meta = await readMetadata(asset.uri, asset.filename);
           const aKey = albumKey(meta.artist, meta.album);
 
-          // Resolve art for this album
-          if (!artCache.has(aKey)) {
-            const existing = await artFileExists(aKey);
-            if (existing) {
-              artCache.set(aKey, existing);
-            } else if (meta.albumArtBase64) {
-              try {
-                const filePath = await saveArtFile(aKey, meta.albumArtBase64);
-                artCache.set(aKey, filePath);
-              } catch {
-                artCache.set(aKey, null);
-              }
-            } else {
-              artCache.set(aKey, null);
-            }
-          }
+if (!artCache.has(aKey)) {
+  const existing = await artFileExists(aKey);
+  if (existing) {
+    // Already cached on disk — use immediately
+    artCache.set(aKey, existing);
+  } else if (!isUnknown(meta.artist) && !isUnknown(meta.album)) {
+    // Try MusicBrainz first — more reliable than embedded art on Light Phone
+    const mbUrl = await fetchMusicBrainzArt(meta.artist, meta.album);
+    if (mbUrl) {
+      artCache.set(aKey, mbUrl);
+    } else if (meta.albumArtBase64) {
+      // Fall back to embedded art if MusicBrainz has nothing
+      try {
+        const filePath = await saveArtFile(aKey, meta.albumArtBase64);
+        artCache.set(aKey, filePath);
+      } catch {
+        artCache.set(aKey, null);
+      }
+    } else {
+      artCache.set(aKey, null);
+    }
+    await delay(MB_RATE_LIMIT_MS);
+  } else if (meta.albumArtBase64) {
+    // Unknown artist/album — just use embedded art
+    try {
+      const filePath = await saveArtFile(aKey, meta.albumArtBase64);
+      artCache.set(aKey, filePath);
+    } catch {
+      artCache.set(aKey, null);
+    }
+  } else {
+    artCache.set(aKey, null);
+  }
+}
 
           tracks.push({
             id: asset.id,
@@ -477,41 +528,19 @@ export function useMediaLibrary() {
 
           processed++;
           if (!silent) {
-            const total = assets.length;
-            const done = cachedAssets.length + processed;
-            setState((s) => ({ ...s, scanProgress: done / total }));
+            setState((s) => ({
+              ...s,
+              scanProgress: (cachedAssets.length + processed) / assets.length,
+            }));
           }
         });
 
-        // Process new files with limited concurrency
         await pLimit(tasks, CONCURRENCY);
       }
 
       if (cancelled.current) return;
 
-      // MusicBrainz pass — only for albums still missing art
-      const albumsMissingArt = new Set<string>();
-      for (const track of tracks) {
-        const aKey = track.albumId;
-        if (!artCache.get(aKey) && !isUnknown(track.artist) && !isUnknown(track.album)) {
-          albumsMissingArt.add(aKey);
-        }
-      }
-
-      for (const aKey of albumsMissingArt) {
-        if (cancelled.current) break;
-        if (mbAttempted.has(aKey)) continue;
-        mbAttempted.add(aKey);
-
-        const sample = tracks.find((t) => t.albumId === aKey);
-        if (!sample) continue;
-
-        const mbUrl = await fetchMusicBrainzArt(sample.artist, sample.album);
-        if (mbUrl) artCache.set(aKey, mbUrl);
-        await delay(MB_RATE_LIMIT_MS);
-      }
-
-      // Apply final resolved art to all tracks
+      // Apply final art to all tracks
       for (const track of tracks) {
         track.albumArt = artCache.get(track.albumId) ?? null;
       }
@@ -519,7 +548,6 @@ export function useMediaLibrary() {
       const sortedTracks = [...tracks].sort((a, b) => a.title.localeCompare(b.title));
       const { albums, artists } = buildLibrary(tracks);
 
-      // Build mod time map for next incremental scan
       const newModTimes: Record<string, number> = {};
       for (const asset of assets) {
         newModTimes[asset.id] = (asset as any).modificationTime ?? 0;
@@ -538,7 +566,11 @@ export function useMediaLibrary() {
         permissionGranted: true,
       });
     } catch (e: any) {
-      setState((s) => ({ ...s, loading: false, error: e?.message ?? "Failed to scan" }));
+      setState((s) => ({
+        ...s,
+        loading: false,
+        error: e?.message ?? "Failed to scan music library",
+      }));
     }
   }, [saveCache, saveArtCache, loadArtCache]);
 
@@ -576,7 +608,6 @@ export function useMediaLibrary() {
           error: null,
           permissionGranted: true,
         });
-        // Background rescan — pass cache for incremental diff
         setTimeout(() => scan(true, cache), 2000);
       } else {
         await scan(false, null);

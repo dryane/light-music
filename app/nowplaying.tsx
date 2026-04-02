@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useCallback } from "react";
+import React, { useRef, useEffect, useCallback, useState } from "react";
 import {
   View,
   StyleSheet,
@@ -14,12 +14,12 @@ import TrackPlayer, {
 } from "react-native-track-player";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { FontAwesome5 } from "@expo/vector-icons";
 import { StyledText } from "@/components/StyledText";
 import { AlbumArt } from "@/components/AlbumArt";
 import { PlayPauseButton, SkipPrevButton, SkipNextButton } from "@/components/PlayerButtons";
 import { useInvertColors } from "@/contexts/InvertColorsContext";
 import { usePlayer } from "@/contexts/PlayerContext";
+import { setGlobalDismissing } from "@/hooks/useSwipeBack";
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get("window");
 const ART_SIZE = SCREEN_W - 200;
@@ -37,13 +37,10 @@ export default function NowPlayingScreen() {
   const { invertColors } = useInvertColors();
   const insets = useSafeAreaInsets();
 
-  // ─── RNTP hooks — single source of truth ─────────────────────────────────
-  // useProgress updates on a native timer — smooth with zero JS state needed
-  const progress = useProgress(100); // 100ms update interval for smooth seek display
   const activeTrack = useActiveTrack();
   const playbackState = usePlaybackState();
+  const progress = useProgress(500);
   const isPlaying = playbackState.state === State.Playing;
-
   const { position, duration } = progress;
 
   const fg = invertColors ? "#000000" : "#ffffff";
@@ -51,46 +48,47 @@ export default function NowPlayingScreen() {
   const bg = invertColors ? "#ffffff" : "#000000";
   const trackBg = invertColors ? "#e0e0e0" : "#1e1e1e";
 
-  // ─── Seek bar — Animated.Value driven, zero setState during drag ──────────
-  const seekProgress = useRef(new Animated.Value(0)).current;
-  const barWidth = useRef(1);
+  // ─── Seek bar ─────────────────────────────────────────────────────────────
+  const seekAnim = useRef(new Animated.Value(0)).current;
   const isDragging = useRef(false);
   const wasPlaying = useRef(false);
-
-  // Refs so PanResponder callbacks always have fresh values
   const durationRef = useRef(duration);
   const isPlayingRef = useRef(isPlaying);
+  const barPageX = useRef(0);
+  const barWidth = useRef(1);
+  const [labelSecs, setLabelSecs] = useState(0);
+  const [dragging, setDragging] = useState(false);
+
   useEffect(() => { durationRef.current = duration; }, [duration]);
   useEffect(() => { isPlayingRef.current = isPlaying; }, [isPlaying]);
 
-  // Drive seekProgress from RNTP when not dragging
   useEffect(() => {
-    if (!isDragging.current && duration > 0) {
-      seekProgress.setValue(position / duration);
-    }
+    if (isDragging.current) return;
+    if (duration <= 0) return;
+    const ratio = Math.min(1, position / duration);
+    Animated.timing(seekAnim, {
+      toValue: ratio,
+      duration: 480,
+      useNativeDriver: false,
+    }).start();
+    setLabelSecs(position);
   }, [position, duration]);
 
-  // Interpolated fill and thumb position — runs on native thread
-  const fillWidth = seekProgress.interpolate({
+  const fillWidth = seekAnim.interpolate({
     inputRange: [0, 1],
     outputRange: ["0%", "100%"],
     extrapolate: "clamp",
   });
-  const thumbLeft = seekProgress.interpolate({
+  const thumbLeft = seekAnim.interpolate({
     inputRange: [0, 1],
     outputRange: ["0%", "100%"],
     extrapolate: "clamp",
   });
 
-  // Time label state — only updates while dragging (30fps throttle)
-  const displayTime = useRef(position);
-  const lastLabelUpdate = useRef(0);
-  const [labelPosition, setLabelPosition] = React.useState(0);
-
-  // Sync label with player when not dragging
-  useEffect(() => {
-    if (!isDragging.current) setLabelPosition(position);
-  }, [position]);
+  const screenXToRatio = (screenX: number) => {
+    const x = screenX - barPageX.current;
+    return Math.min(1, Math.max(0, x / barWidth.current));
+  };
 
   const seekPan = useRef(
     PanResponder.create({
@@ -102,57 +100,49 @@ export default function NowPlayingScreen() {
       onPanResponderGrant: (e) => {
         isDragging.current = true;
         wasPlaying.current = isPlayingRef.current;
-        if (isPlayingRef.current) TrackPlayer.pause();
-
-        const ratio = Math.min(1, Math.max(0, e.nativeEvent.locationX / barWidth.current));
-        seekProgress.setValue(ratio);
-        const ms = ratio * durationRef.current;
-        displayTime.current = ms;
-        setLabelPosition(ms);
+        seekAnim.stopAnimation();
+        TrackPlayer.pause();
+        setDragging(true);
+        const ratio = screenXToRatio(e.nativeEvent.pageX);
+        seekAnim.setValue(ratio);
+        setLabelSecs(ratio * durationRef.current);
       },
 
-      onPanResponderMove: (e) => {
-        const ratio = Math.min(1, Math.max(0, e.nativeEvent.locationX / barWidth.current));
-        // Update native animated value — no re-render
-        seekProgress.setValue(ratio);
-
-        // Throttle label to ~30fps
-        const now = Date.now();
-        if (now - lastLabelUpdate.current > 33) {
-          lastLabelUpdate.current = now;
-          const secs = ratio * durationRef.current;
-          displayTime.current = secs;
-          setLabelPosition(secs);
-        }
+      onPanResponderMove: (e, g) => {
+        const ratio = screenXToRatio(g.moveX);
+        seekAnim.setValue(ratio);
+        setLabelSecs(ratio * durationRef.current);
       },
 
-      onPanResponderRelease: (e) => {
-        const ratio = Math.min(1, Math.max(0, e.nativeEvent.locationX / barWidth.current));
+      onPanResponderRelease: (e, g) => {
+        const ratio = screenXToRatio(g.moveX);
         const targetSecs = ratio * durationRef.current;
-
-        seekProgress.setValue(ratio);
-        setLabelPosition(targetSecs);
-        isDragging.current = false;
-
+        seekAnim.setValue(ratio);
+        setLabelSecs(targetSecs);
         TrackPlayer.seekTo(targetSecs).then(() => {
+          isDragging.current = false;
+          setDragging(false);
           if (wasPlaying.current) TrackPlayer.play();
         });
       },
 
       onPanResponderTerminate: () => {
         isDragging.current = false;
+        setDragging(false);
         if (wasPlaying.current) TrackPlayer.play();
       },
     })
   ).current;
 
-  // ─── Art swipe left/right to skip ────────────────────────────────────────
-  const artX = useRef(new Animated.Value(0)).current;
-  const artOpacity = useRef(new Animated.Value(1)).current;
+  // ─── Refs for closures ────────────────────────────────────────────────────
   const skipNextRef = useRef(skipNext);
   const skipPrevRef = useRef(skipPrev);
   useEffect(() => { skipNextRef.current = skipNext; }, [skipNext]);
   useEffect(() => { skipPrevRef.current = skipPrev; }, [skipPrev]);
+
+  // ─── Art swipe ────────────────────────────────────────────────────────────
+  const artX = useRef(new Animated.Value(0)).current;
+  const artOpacity = useRef(new Animated.Value(1)).current;
 
   const animateSkip = useCallback((direction: "left" | "right", onComplete: () => void) => {
     const toValue = direction === "left" ? -SCREEN_W : SCREEN_W;
@@ -194,7 +184,7 @@ export default function NowPlayingScreen() {
     })
   ).current;
 
-  // ─── Screen swipe down to dismiss ────────────────────────────────────────
+  // ─── Screen dismiss swipe down ────────────────────────────────────────────
   const screenY = useRef(new Animated.Value(0)).current;
   const screenOpacity = screenY.interpolate({
     inputRange: [0, SCREEN_H * 0.5],
@@ -207,34 +197,35 @@ export default function NowPlayingScreen() {
     extrapolate: "clamp",
   });
 
+  const dismissingRef = useRef(false);
+
   const screenPan = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => false,
       onMoveShouldSetPanResponder: (_, g) =>
-        g.dy > 2 && Math.abs(g.dy) > Math.abs(g.dx) * 1.5,
+        !dismissingRef.current && g.dy > 2 && Math.abs(g.dy) > Math.abs(g.dx) * 1.5,
       onPanResponderMove: (_, g) => {
-        if (g.dy > 0) screenY.setValue(g.dy);
+        if (!dismissingRef.current && g.dy > 0) screenY.setValue(g.dy);
       },
-      onPanResponderRelease: (_, g) => {
-        if (g.dy > DISMISS_THRESHOLD || g.vy > DISMISS_VELOCITY) {
-          Animated.timing(screenY, {
-            toValue: SCREEN_H,
-            duration: 220,
-            useNativeDriver: true,
-          }).start(() => {
-            router.back();
-            screenY.setValue(0);
-          });
-        } else {
-          Animated.spring(screenY, {
-            toValue: 0,
-            useNativeDriver: true,
-            tension: 120,
-            friction: 14,
-          }).start();
-        }
-      },
+onPanResponderRelease: (_, g) => {
+  if (dismissingRef.current) return;
+  if (g.dy > DISMISS_THRESHOLD || g.vy > DISMISS_VELOCITY) {
+    dismissingRef.current = true;
+    setGlobalDismissing(true);
+    router.back();
+    setTimeout(() => { setGlobalDismissing(false); }, 1000);
+  } else {
+    Animated.spring(screenY, {
+      toValue: 0,
+      useNativeDriver: true,
+      tension: 120,
+      friction: 14,
+    }).start();
+  }
+},
       onPanResponderTerminate: () => {
+        // If dismissing, don't interfere with the animation
+        if (dismissingRef.current) return;
         Animated.spring(screenY, {
           toValue: 0,
           useNativeDriver: true,
@@ -263,18 +254,16 @@ export default function NowPlayingScreen() {
           backgroundColor: bg,
           paddingTop: insets.top + 12,
           paddingBottom: insets.bottom + 16,
-          transform: [{ translateY: screenY }, { scale: screenScale }],
-          opacity: screenOpacity,
+      transform: [{ translateY: screenY }],
+
         },
       ]}
       {...screenPan.panHandlers}
     >
-      {/* Drag handle */}
       <View style={styles.handleWrap}>
         <View style={[styles.handle, { backgroundColor: fgMuted }]} />
       </View>
 
-      {/* Album art — swipe left/right to skip */}
       <Animated.View
         style={[styles.artWrap, { transform: [{ translateX: artX }], opacity: artOpacity }]}
         {...artPan.panHandlers}
@@ -282,7 +271,6 @@ export default function NowPlayingScreen() {
         <AlbumArt uri={activeTrack.artwork ?? null} size={ART_SIZE} radius={8} />
       </Animated.View>
 
-      {/* Track info */}
       <View style={styles.trackInfo}>
         <StyledText style={[styles.trackTitle, { color: fg }]} numberOfLines={2}>
           {activeTrack.title}
@@ -295,11 +283,15 @@ export default function NowPlayingScreen() {
         </StyledText>
       </View>
 
-      {/* Seek bar */}
       <View style={styles.progressSection}>
         <View
           style={styles.seekHitArea}
-          onLayout={(e) => { barWidth.current = e.nativeEvent.layout.width; }}
+          onLayout={(e) => {
+            barWidth.current = e.nativeEvent.layout.width;
+            e.target.measure((_x, _y, _w, _h, pageX) => {
+              barPageX.current = pageX;
+            });
+          }}
           {...seekPan.panHandlers}
         >
           <View style={[styles.progressTrack, { backgroundColor: trackBg }]}>
@@ -308,21 +300,23 @@ export default function NowPlayingScreen() {
             />
           </View>
           <Animated.View
-            style={[styles.thumb, { backgroundColor: fg, left: thumbLeft }]}
+            style={[
+              styles.thumb,
+              {
+                backgroundColor: fg,
+                left: thumbLeft,
+                transform: [{ scale: dragging ? 1.4 : 1 }],
+              },
+            ]}
           />
         </View>
 
         <View style={styles.timeRow}>
-          <StyledText style={[styles.time, { color: fgMuted }]}>
-            {fmt(labelPosition)}
-          </StyledText>
-          <StyledText style={[styles.time, { color: fgMuted }]}>
-            {fmt(duration)}
-          </StyledText>
+          <StyledText style={[styles.time, { color: fgMuted }]}>{fmt(labelSecs)}</StyledText>
+          <StyledText style={[styles.time, { color: fgMuted }]}>{fmt(duration)}</StyledText>
         </View>
       </View>
 
-      {/* Controls */}
       <View style={styles.controls}>
         <SkipPrevButton onPress={skipPrev} color={fg} size={18} />
         <PlayPauseButton isPlaying={isPlaying} onPress={togglePlayPause} color={fg} size={100} />
@@ -343,7 +337,7 @@ const styles = StyleSheet.create({
   handleWrap: { alignItems: "center", marginBottom: -8 },
   handle: { width: 36, height: 4, borderRadius: 2, opacity: 0.3 },
   artWrap: { alignSelf: "center" },
-  trackInfo: { gap: 4 },
+  trackInfo: { gap: 4, marginBottom:-15 },
   trackTitle: { fontSize: 14, fontWeight: "700", lineHeight: 24, marginBottom: -6 },
   trackSub: { fontSize: 10 },
   progressSection: { gap: 8, marginBottom: -30 },

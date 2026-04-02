@@ -1,9 +1,12 @@
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import * as SplashScreen from "expo-splash-screen";
 import { useFonts } from "expo-font";
-import { View, StyleSheet } from "react-native";
+import { View, StyleSheet, AppState } from "react-native";
+import TrackPlayer from "react-native-track-player";
+import { useActiveTrack, usePlaybackState, State } from "react-native-track-player";
+import { router } from "expo-router";
 import { InvertColorsProvider, useInvertColors } from "@/contexts/InvertColorsContext";
 import { HapticProvider } from "@/contexts/HapticContext";
 import { PlayerProvider } from "@/contexts/PlayerContext";
@@ -12,9 +15,39 @@ import { MiniPlayer } from "@/components/MiniPlayer";
 
 SplashScreen.preventAutoHideAsync();
 
+// Register RNTP background service once at startup
+let serviceRegistered = false;
+if (!serviceRegistered) {
+  serviceRegistered = true;
+  TrackPlayer.registerPlaybackService(() => require("../service"));
+}
+
 function AppShell() {
   const { invertColors } = useInvertColors();
   const bg = invertColors ? "#ffffff" : "#000000";
+  const activeTrack = useActiveTrack();
+  const playbackState = usePlaybackState();
+  const isPlaying = playbackState.state === State.Playing;
+  const appState = useRef(AppState.currentState);
+
+  // Open now playing when app comes back to foreground if playing
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (nextState) => {
+      if (
+        appState.current.match(/inactive|background/) &&
+        nextState === "active"
+      ) {
+        // App came to foreground
+        TrackPlayer.getPlaybackState().then((state) => {
+          if (state.state === State.Playing) {
+            router.push("/nowplaying");
+          }
+        });
+      }
+      appState.current = nextState;
+    });
+    return () => sub.remove();
+  }, []);
 
   return (
     <View style={[styles.root, { backgroundColor: bg }]}>
