@@ -17,6 +17,7 @@ import TrackPlayer, {
 } from "react-native-track-player";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Track } from "@/types/music";
+import { router } from "expo-router";
 
 const STORAGE_KEY = "player_state_v2";
 
@@ -178,6 +179,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     } else {
       trackMapRef.current.set(track.id, track);
     }
+
+    router.push("/nowplaying");
 
     // Load the queue into RNTP
     await TrackPlayer.reset();

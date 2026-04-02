@@ -1,27 +1,47 @@
 {
   "expo": {
-    "name": "appname",
-    "slug": "appname",
+    "name": "Light Music",
+    "slug": "light-music",
     "version": "1.0.0",
     "orientation": "portrait",
-    "scheme": "appname",
-    "newArchEnabled": true,
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#000000"
+    },
     "android": {
-      "backgroundColor": "#000000",
-      "package": "com.vandam.appname"
+      "versionCode": 1,
+      "package": "dev.danieljosephryan.lightmusic",
+      "newArchEnabled": false,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#000000"
+      },
+      "permissions": [
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_AUDIO",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
+      ]
     },
     "plugins": [
       "expo-router",
-      "expo-font",
-      "./plugins/withAndroidConfigChanges",
-      "./plugins/withAndroidTheme"
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Allow Light Music to access your audio files.",
+          "savePhotosPermission": "Allow Light Music to save audio files.",
+          "isAccessMediaLocationEnabled": true
+        }
+      ]
     ],
-    "experiments": {
-      "typedRoutes": true
-    },
+    "scheme": "lightmusic",
     "extra": {
-      "router": {}
+      "router": {
+        "origin": false
+      }
     }
   }
 }

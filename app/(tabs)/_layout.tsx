@@ -1,35 +1,29 @@
-import React from "react";
 import { Tabs } from "expo-router";
-import { Navbar, TabConfigItem } from "@/components/Navbar";
+import { View, StyleSheet } from "react-native";
+import { useInvertColors } from "@/contexts/InvertColorsContext";
+import { MiniPlayer } from "@/components/MiniPlayer";
 
-export const TABS_CONFIG: ReadonlyArray<TabConfigItem> = [
-    { name: "Liked Songs", screenName: "index", iconName: "home" },
-    { name: "Search", screenName: "search", iconName: "search" },
-    { name: "Settings", screenName: "settings", iconName: "settings" },
-] as const;
+export default function TabsLayout() {
+  const { invertColors } = useInvertColors();
+  const bg = invertColors ? "#ffffff" : "#000000";
 
-export default function TabLayout() {
-    return (
+  return (
+    <View style={[styles.root, { backgroundColor: bg }]}>
+      <View style={styles.inner}>
         <Tabs
-            tabBar={(props) => {
-                const activeScreenName =
-                    props.state.routes[props.state.index].name;
-                return (
-                    <Navbar
-                        tabsConfig={TABS_CONFIG}
-                        currentScreenName={activeScreenName}
-                        navigation={props.navigation}
-                    />
-                );
-            }}
+          screenOptions={{
+            headerShown: false,
+            tabBarStyle: { display: "none" },
+          }}
         >
-            {TABS_CONFIG.map((tab) => (
-                <Tabs.Screen
-                    key={tab.screenName}
-                    name={tab.screenName}
-                    options={{ header: () => null }}
-                />
-            ))}
+          <Tabs.Screen name="index" />
         </Tabs>
-    );
+      </View>
+    </View>
+  );
 }
+
+const styles = StyleSheet.create({
+  root: { flex: 1 },
+  inner: { flex: 1 },
+});

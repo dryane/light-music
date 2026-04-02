@@ -1,15 +1,18 @@
 import { useRef, useEffect } from "react";
 import { PanResponder, Animated, Dimensions } from "react-native";
-import { router, useIsFocused } from "expo-router";
+import { router } from "expo-router";
+import { useIsFocused } from "@react-navigation/native";
 
 const SCREEN_W = Dimensions.get("window").width;
 const DISMISS_THRESHOLD = SCREEN_W * 0.35;
 const DISMISS_VELOCITY = 0.4;
 
-// Module-level lock — shared across all instances
+// Module-level — shared across all instances
 // Prevents underlying screens from triggering their own dismiss
-// while a dismiss animation is already in progress
-let globalDismissing = false;
+export let globalDismissing = false;
+export function setGlobalDismissing(val: boolean) {
+  globalDismissing = val;
+}
 
 export function useSwipeBack() {
   const translateX = useRef(new Animated.Value(0)).current;
@@ -18,8 +21,8 @@ export function useSwipeBack() {
 
   useEffect(() => {
     isFocusedRef.current = isFocused;
-    // Reset translateX when screen regains focus (e.g. after a child screen pops)
     if (isFocused) {
+      // Reset when screen comes back into focus
       translateX.setValue(0);
     }
   }, [isFocused]);
@@ -39,28 +42,21 @@ export function useSwipeBack() {
         if (g.dx > 0) translateX.setValue(g.dx);
       },
 
-      onPanResponderRelease: (_, g) => {
-        if (globalDismissing) return;
-        if (g.dx > DISMISS_THRESHOLD || g.vx > DISMISS_VELOCITY) {
-          globalDismissing = true;
-          Animated.timing(translateX, {
-            toValue: SCREEN_W,
-            duration: 180,
-            useNativeDriver: true,
-          }).start(() => {
-            router.back();
-            translateX.setValue(0);
-            setTimeout(() => { globalDismissing = false; }, 1000);
-          });
-        } else {
-          Animated.spring(translateX, {
-            toValue: 0,
-            useNativeDriver: true,
-            tension: 120,
-            friction: 14,
-          }).start();
-        }
-      },
+onPanResponderRelease: (_, g) => {
+  if (globalDismissing) return;
+  if (g.dx > DISMISS_THRESHOLD || g.vx > DISMISS_VELOCITY) {
+    globalDismissing = true;
+    setTimeout(() => { globalDismissing = false; }, 1000);
+    router.back();
+  } else {
+    Animated.spring(translateX, {
+      toValue: 0,
+      useNativeDriver: true,
+      tension: 120,
+      friction: 14,
+    }).start();
+  }
+},
 
       onPanResponderTerminate: () => {
         if (!globalDismissing) {
