@@ -1,4 +1,4 @@
-package com.vandam.lightmusic
+package dev.danieljosephryan.lightmusic
 
 import android.app.Application
 import android.content.res.Configuration

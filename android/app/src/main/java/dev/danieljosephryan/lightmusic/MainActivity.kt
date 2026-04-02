@@ -1,4 +1,4 @@
-package com.vandam.lightmusic
+package dev.danieljosephryan.lightmusic
 import expo.modules.splashscreen.SplashScreenManager
 
 import android.os.Build

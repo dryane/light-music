@@ -87,13 +87,13 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace 'com.vandam.lightmusic'
+    namespace 'dev.danieljosephryan.lightmusic'
     defaultConfig {
-        applicationId 'com.vandam.lightmusic'
+        applicationId 'dev.danieljosephryan.lightmusic'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 8
-        versionName "1.0.20"
+        versionCode 2
+        versionName "1.0.1"
 
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
     }
