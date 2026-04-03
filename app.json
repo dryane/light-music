@@ -2,7 +2,7 @@
   "expo": {
     "name": "Light Music",
     "slug": "light-music",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -12,7 +12,7 @@
       "backgroundColor": "#000000"
     },
     "android": {
-      "versionCode": 3,
+      "versionCode": 4,
       "package": "dev.danieljosephryan.lightmusic",
       "newArchEnabled": false,
       "adaptiveIcon": {
