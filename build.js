@@ -94,7 +94,7 @@ if (!fs.existsSync(oldPath)) {
   process.exit(1);
 }
 
-fs.renameSync(oldPath, newPath);
+fs.copyFileSync(oldPath, newPath);
 
 console.log(`\n✅ Build complete!`);
 console.log(`   APK: android/app/build/outputs/apk/release/${newName}\n`);

@@ -56,7 +56,7 @@ yarn-error.*
 *.pem
 
 # local env files
-.env*.local
+.env
 
 # typescript
 *.tsbuildinfo
@@ -64,3 +64,6 @@ yarn-error.*
 app-example
 .cursor
 docs/.env
+
+build.js
+rename-apk.js
