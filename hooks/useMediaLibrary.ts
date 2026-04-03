@@ -11,13 +11,15 @@ import { parseBuffer, selectCover } from "music-metadata";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Track, Album, Artist } from "@/types/music";
 
-const CACHE_KEY = "library_cache_v10";
-const ART_CACHE_KEY = "library_art_cache_v5";
+const CACHE_KEY = "library_cache_v12";
+const ART_CACHE_KEY = "library_art_cache_v7";
 const CACHE_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 365;
 const ART_DIR = (cacheDirectory ?? "") + "album-art/";
-const MB_USER_AGENT = "LightMusic/1.0 (lightmusic@example.com)";
-const MB_RATE_LIMIT_MS = 1100;
 const CONCURRENCY = 4;
+
+// Set to true to use embedded album art from file metadata as a fallback.
+// Keep false for Light Phone — it strips/corrupts embedded art during transcoding.
+const USE_EMBEDDED_ART = false;
 
 interface ScanState {
   tracks: Track[];
@@ -27,6 +29,7 @@ interface ScanState {
   scanProgress: number;
   error: string | null;
   permissionGranted: boolean;
+  fetchingArtAlbumIds: Set<string>;
 }
 
 interface CachedLibrary {
@@ -36,8 +39,15 @@ interface CachedLibrary {
   assetModTimes?: Record<string, number>;
 }
 
+// ─── Helpers ───────────────────────────────────────────────────────────────
+
 function normalise(str: string) {
-  return str.trim().toLowerCase();
+  return str
+    .trim()
+    .toLowerCase()
+    .replace(/[\u2018\u2019\u201a\u201b]/g, "'")
+    .replace(/[\u201c\u201d\u201e\u201f]/g, '"')
+    .replace(/[\u2013\u2014]/g, "-");
 }
 
 function albumKey(artist: string, album: string) {
@@ -130,42 +140,78 @@ async function artFileExists(albumId: string): Promise<string | null> {
   return null;
 }
 
-// ─── MusicBrainz ──────────────────────────────────────────────────────────
+// ─── iTunes Search API ─────────────────────────────────────────────────────
+// Free, no auth, no rate limits, excellent coverage
 
-async function fetchMusicBrainzArt(artist: string, album: string): Promise<string | null> {
+// Fetch art for a single album from iTunes
+async function fetchItunesArt(artist: string, album: string): Promise<string | null> {
   try {
+    // Strip EP/Single suffixes for better matching
     const cleanAlbum = album
-      .replace(/\s*[-–]\s*single$/i, "")
+      .replace(/\s*-\s*single$/i, "")
+      .replace(/\s*-\s*ep$/i, "")
       .replace(/\s*\(single\)$/i, "")
       .replace(/\s*\(ep\)$/i, "")
       .trim();
 
-    const q = `artist:"${artist}" release:"${cleanAlbum}"`;
-    const res = await fetch(
-      `https://musicbrainz.org/ws/2/release/?query=${encodeURIComponent(q)}&fmt=json&limit=5`,
-      { headers: { "User-Agent": MB_USER_AGENT } }
-    );
+    const term = encodeURIComponent(`${artist} ${cleanAlbum}`);
+    const url = `https://itunes.apple.com/search?term=${term}&entity=album&limit=5`;
+    const res = await fetch(url);
     if (!res.ok) return null;
 
     const data = await res.json();
-    const releases: any[] = data.releases ?? [];
-    if (releases.length === 0) return null;
+    const results: any[] = data.results ?? [];
+    if (results.length === 0) return null;
 
-    for (const release of releases) {
-      const url = `https://coverartarchive.org/release/${release.id}/front-500`;
-      try {
-        const check = await fetch(url, {
-          method: "HEAD",
-          headers: { "User-Agent": MB_USER_AGENT },
-          redirect: "follow",
-        });
-        if (check.ok) return url;
-      } catch {}
+    // Find the best match by comparing normalised names
+    const normArtist = normalise(artist);
+    const normAlbum = normalise(cleanAlbum);
+
+    // Score each result — prefer exact artist + album matches
+    let bestResult = results[0];
+    let bestScore = 0;
+
+    for (const result of results) {
+      const rArtist = normalise(result.artistName ?? "");
+      const rAlbum = normalise(result.collectionName ?? "");
+      let score = 0;
+      if (rArtist === normArtist) score += 2;
+      else if (rArtist.includes(normArtist) || normArtist.includes(rArtist)) score += 1;
+      if (rAlbum === normAlbum) score += 2;
+      else if (rAlbum.includes(normAlbum) || normAlbum.includes(rAlbum)) score += 1;
+      if (score > bestScore) {
+        bestScore = score;
+        bestResult = result;
+      }
     }
-    return null;
+
+    // Need at least a partial artist match to avoid wrong results
+    if (bestScore < 1) return null;
+
+    // Replace 100x100 with 600x600 for full quality
+    const artUrl: string = bestResult.artworkUrl100;
+    if (!artUrl) return null;
+    return artUrl.replace("100x100bb", "600x600bb");
   } catch {
     return null;
   }
+}
+
+// Fetch art for multiple albums concurrently
+// iTunes has no auth and generous rate limits — run 8 at a time
+async function fetchItunesArtForAlbums(
+  albums: { aKey: string; artist: string; title: string }[]
+): Promise<Map<string, string>> {
+  const result = new Map<string, string>();
+  if (albums.length === 0) return result;
+
+  const tasks = albums.map(({ aKey, artist, title }) => async () => {
+    const url = await fetchItunesArt(artist, title);
+    if (url) result.set(aKey, url);
+  });
+
+  await pLimit(tasks, 8);
+  return result;
 }
 
 // ─── Metadata reading ──────────────────────────────────────────────────────
@@ -206,10 +252,12 @@ async function readMetadata(uri: string, filename: string): Promise<{
     const trackNumber = common.track?.no ?? null;
 
     let albumArtBase64: string | null = null;
-    const cover = selectCover(common.picture);
-    if (cover) {
-      const b64 = btoa(Array.from(cover.data).map((b) => String.fromCharCode(b)).join(""));
-      albumArtBase64 = `data:${cover.format};base64,${b64}`;
+    if (USE_EMBEDDED_ART) {
+      const cover = selectCover(common.picture);
+      if (cover) {
+        const b64 = btoa(Array.from(cover.data).map((b) => String.fromCharCode(b)).join(""));
+        albumArtBase64 = `data:${cover.format};base64,${b64}`;
+      }
     }
 
     return { title, artist, album, albumArtBase64, year, trackNumber };
@@ -318,6 +366,7 @@ export function useMediaLibrary() {
     scanProgress: 0,
     error: null,
     permissionGranted: false,
+    fetchingArtAlbumIds: new Set(),
   });
   const cancelled = useRef(false);
 
@@ -394,11 +443,23 @@ export function useMediaLibrary() {
       }
       const cachedModTimes = existingCache?.assetModTimes ?? {};
 
+      // Load saved art URLs into artCache
       const savedArtMap = await loadArtCache();
       for (const [albumId, artPath] of Object.entries(savedArtMap)) {
         artCache.set(albumId, artPath);
       }
 
+      // Pre-populate from existing cached tracks so background rescans
+      // skip albums we already have art for
+      if (existingCache?.tracks) {
+        for (const t of existingCache.tracks) {
+          if (t.albumArt && !artCache.has(t.albumId)) {
+            artCache.set(t.albumId, t.albumArt);
+          }
+        }
+      }
+
+      // Split into cached (skip re-read) vs new/changed
       const newAssets: MediaLibrary.Asset[] = [];
       const cachedAssets: MediaLibrary.Asset[] = [];
 
@@ -430,12 +491,12 @@ export function useMediaLibrary() {
           const meta = await readMetadata(asset.uri, asset.filename);
           const aKey = albumKey(meta.artist, meta.album);
 
-          // Disk cache only — no network calls in phase 1
+          // Disk cache only — no network in phase 1
           if (!artCache.has(aKey)) {
             const existing = await artFileExists(aKey);
             if (existing) {
               artCache.set(aKey, existing);
-            } else if (meta.albumArtBase64) {
+            } else if (USE_EMBEDDED_ART && meta.albumArtBase64) {
               try {
                 const filePath = await saveArtFile(aKey, meta.albumArtBase64);
                 artCache.set(aKey, filePath);
@@ -493,41 +554,66 @@ export function useMediaLibrary() {
         scanProgress: 1,
         error: null,
         permissionGranted: true,
+        fetchingArtAlbumIds: new Set(),
       });
 
-      // ── Phase 2: MusicBrainz art in background ────────────────────────────
-      // Library is already visible — art loads in progressively per album
-      const albumsMissingArt = new Map<string, { artist: string; album: string }>();
+      // ── Phase 2: iTunes art fetch in background ───────────────────────────
+      // Collect unique albums still missing art
+      const albumsMissingArt: { aKey: string; artist: string; title: string }[] = [];
+      const seen = new Set<string>();
       for (const track of tracks) {
         if (
           !artCache.get(track.albumId) &&
           !isUnknown(track.artist) &&
-          !isUnknown(track.album)
+          !isUnknown(track.album) &&
+          !seen.has(track.albumId)
         ) {
-          albumsMissingArt.set(track.albumId, { artist: track.artist, album: track.album });
+          seen.add(track.albumId);
+          albumsMissingArt.push({
+            aKey: track.albumId,
+            artist: track.artist,
+            title: track.album,
+          });
         }
       }
 
-      for (const [aKey, { artist, album }] of albumsMissingArt) {
-        if (cancelled.current) break;
+      if (albumsMissingArt.length > 0) {
+        // Mark all as fetching so spinners appear
+        setState((s) => ({
+          ...s,
+          fetchingArtAlbumIds: new Set(albumsMissingArt.map(a => a.aKey)),
+        }));
 
-        const mbUrl = await fetchMusicBrainzArt(artist, album);
-        if (mbUrl) {
-          artCache.set(aKey, mbUrl);
-          for (const track of tracks) {
-            if (track.albumId === aKey) track.albumArt = mbUrl;
+        // Process in chunks of 20 for incremental UI updates
+        const CHUNK_SIZE = 20;
+        for (let i = 0; i < albumsMissingArt.length; i += CHUNK_SIZE) {
+          if (cancelled.current) break;
+
+          const chunk = albumsMissingArt.slice(i, i + CHUNK_SIZE);
+          const artResults = await fetchItunesArtForAlbums(chunk);
+
+          // Apply results
+          for (const { aKey } of chunk) {
+            const url = artResults.get(aKey) ?? null;
+            if (url) {
+              artCache.set(aKey, url);
+              for (const track of tracks) {
+                if (track.albumId === aKey) track.albumArt = url;
+              }
+            }
           }
-          // Push update so art appears as each album resolves
+
+          // Push incremental update after each chunk
           const sortedTracks = [...tracks].sort((a, b) => a.title.localeCompare(b.title));
           const { albums, artists } = buildLibrary(tracks);
-          setState((s) => ({ ...s, tracks: sortedTracks, albums, artists }));
+          setState((s) => {
+            const next = new Set(s.fetchingArtAlbumIds);
+            chunk.forEach(({ aKey }) => next.delete(aKey));
+            return { ...s, tracks: sortedTracks, albums, artists, fetchingArtAlbumIds: next };
+          });
         }
 
-        await delay(MB_RATE_LIMIT_MS);
-      }
-
-      // Save final art cache once background fetches complete
-      if (albumsMissingArt.size > 0) {
+        // Save final art cache
         await saveArtCache(tracks);
       }
 
@@ -573,6 +659,7 @@ export function useMediaLibrary() {
           scanProgress: 1,
           error: null,
           permissionGranted: true,
+          fetchingArtAlbumIds: new Set(),
         });
         setTimeout(() => scan(true, cache), 2000);
       } else {

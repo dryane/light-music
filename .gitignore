@@ -63,4 +63,4 @@ yarn-error.*
 
 app-example
 .cursor
-docs/
+docs/.env
