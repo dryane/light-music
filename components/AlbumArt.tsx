@@ -26,7 +26,7 @@ export function AlbumArt({ uri, size, radius = 0 }: AlbumArtProps) {
     <View
       style={[
         styles.placeholder,
-        { width: size, height: size, borderRadius: radius, backgroundColor: placeholderBg },
+        { height: size, width: 0, marginRight:-12 },
       ]}
     />
   );

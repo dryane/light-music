@@ -45,7 +45,7 @@ export function MiniPlayer() {
 
   const fg = invertColors ? "#000000" : "#ffffff";
   const fgMuted = invertColors ? "#888888" : "#484848";
-  const bg = invertColors ? "#f5f5f5" : "#0e0e0e";
+  const bg = invertColors ? "#ffffff" : "#000000";
   const border = invertColors ? "#e0e0e0" : "#1a1a1a";
   const progressColor = invertColors ? "#000000" : "#ffffff";
   const progressBg = invertColors ? "#e0e0e0" : "#2a2a2a";
@@ -66,6 +66,7 @@ export function MiniPlayer() {
         <TouchableOpacity
           onPress={() => router.push("/nowplaying")}
           activeOpacity={1}
+            style={!activeTrack.artwork ? { marginRight: -11 } : undefined}
         >
           <AlbumArt uri={activeTrack.artwork ?? null} size={34} radius={4} />
         </TouchableOpacity>
@@ -135,7 +136,8 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 14,
+    paddingRight: 14,
+    paddingLeft:18,
     paddingVertical: 9,
     borderTopWidth: StyleSheet.hairlineWidth,
     gap: 11,
