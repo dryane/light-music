@@ -17,6 +17,9 @@ const CACHE_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 365;
 const ART_DIR = (cacheDirectory ?? "") + "album-art/";
 const CONCURRENCY = 4;
 
+// Minimum similarity score (0-1) to accept an album art match
+const MIN_SCORE = 0.7;
+
 // Set to true to use embedded album art from file metadata as a fallback.
 // Keep false for Light Phone — it strips/corrupts embedded art during transcoding.
 const USE_EMBEDDED_ART = false;
@@ -48,6 +51,37 @@ function normalise(str: string) {
     .replace(/[\u2018\u2019\u201a\u201b]/g, "'")
     .replace(/[\u201c\u201d\u201e\u201f]/g, '"')
     .replace(/[\u2013\u2014]/g, "-");
+}
+
+// Strip to alphanumeric only for fuzzy matching
+function normaliseForMatch(str: string): string {
+  return str.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
+}
+
+// Levenshtein similarity — returns 0 to 1
+function similarity(a: string, b: string): number {
+  if (a === b) return 1;
+  if (!a.length || !b.length) return 0;
+
+  const matrix: number[][] = Array.from({ length: a.length + 1 }, () =>
+    Array(b.length + 1).fill(0)
+  );
+  for (let i = 0; i <= a.length; i++) matrix[i][0] = i;
+  for (let j = 0; j <= b.length; j++) matrix[0][j] = j;
+
+  for (let i = 1; i <= a.length; i++) {
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      matrix[i][j] = Math.min(
+        matrix[i - 1][j] + 1,
+        matrix[i][j - 1] + 1,
+        matrix[i - 1][j - 1] + cost
+      );
+    }
+  }
+
+  const distance = matrix[a.length][b.length];
+  return 1 - distance / Math.max(a.length, b.length);
 }
 
 function albumKey(artist: string, album: string) {
@@ -141,76 +175,104 @@ async function artFileExists(albumId: string): Promise<string | null> {
 }
 
 // ─── iTunes Search API ─────────────────────────────────────────────────────
-// Free, no auth, no rate limits, excellent coverage
 
-// Fetch art for a single album from iTunes
-async function fetchItunesArt(artist: string, album: string): Promise<string | null> {
+interface ItunesCollection {
+  collectionName: string;
+  artworkUrl100: string;
+  artworkUrl512: string;
+  _assigned: boolean;
+}
+
+// Fetch all albums for an artist from iTunes in two steps:
+// 1. Search for artistId
+// 2. Lookup all collections (albums) for that artist
+async function fetchArtistCollections(artistName: string): Promise<ItunesCollection[]> {
   try {
-    // Strip EP/Single suffixes for better matching
-    const cleanAlbum = album
-      .replace(/\s*-\s*single$/i, "")
-      .replace(/\s*-\s*ep$/i, "")
-      .replace(/\s*\(single\)$/i, "")
-      .replace(/\s*\(ep\)$/i, "")
-      .trim();
+    // Step 1: get artistId
+    const searchRes = await fetch(
+      `https://itunes.apple.com/search?term=${encodeURIComponent(artistName)}&entity=musicArtist&limit=1`
+    );
+    if (!searchRes.ok) return [];
+    const searchData = await searchRes.json();
+    const artistId = searchData.results?.[0]?.artistId;
+    if (!artistId) return [];
 
-    const term = encodeURIComponent(`${artist} ${cleanAlbum}`);
-    const url = `https://itunes.apple.com/search?term=${term}&entity=album&limit=5`;
-    const res = await fetch(url);
-    if (!res.ok) return null;
-
+    // Step 2: get all albums for this artist
+    const res = await fetch(
+      `https://itunes.apple.com/lookup?id=${artistId}&entity=album&limit=200`
+    );
+    if (!res.ok) return [];
     const data = await res.json();
-    const results: any[] = data.results ?? [];
-    if (results.length === 0) return null;
 
-    // Find the best match by comparing normalised names
-    const normArtist = normalise(artist);
-    const normAlbum = normalise(cleanAlbum);
-
-    // Score each result — prefer exact artist + album matches
-    let bestResult = results[0];
-    let bestScore = 0;
-
-    for (const result of results) {
-      const rArtist = normalise(result.artistName ?? "");
-      const rAlbum = normalise(result.collectionName ?? "");
-      let score = 0;
-      if (rArtist === normArtist) score += 2;
-      else if (rArtist.includes(normArtist) || normArtist.includes(rArtist)) score += 1;
-      if (rAlbum === normAlbum) score += 2;
-      else if (rAlbum.includes(normAlbum) || normAlbum.includes(rAlbum)) score += 1;
-      if (score > bestScore) {
-        bestScore = score;
-        bestResult = result;
-      }
-    }
-
-    // Need at least a partial artist match to avoid wrong results
-    if (bestScore < 1) return null;
-
-    // Replace 100x100 with 600x600 for full quality
-    const artUrl: string = bestResult.artworkUrl100;
-    if (!artUrl) return null;
-    return artUrl.replace("100x100bb", "600x600bb");
+    return data.results
+      .filter((r: any) => r.wrapperType === "collection")
+      .map((r: any) => ({
+        collectionName: r.collectionName,
+        artworkUrl100: r.artworkUrl100,
+        artworkUrl512: r.artworkUrl100?.replace("100x100bb", "512x512bb") ?? r.artworkUrl100,
+        _assigned: false,
+      }));
   } catch {
-    return null;
+    return [];
   }
 }
 
-// Fetch art for multiple albums concurrently
-// iTunes has no auth and generous rate limits — run 8 at a time
-async function fetchItunesArtForAlbums(
-  albums: { aKey: string; artist: string; title: string }[]
+// Resolve the best available art URL — prefer 512px, fallback to 100px
+async function resolveArtUrl(collection: ItunesCollection): Promise<string | null> {
+  try {
+    const res512 = await fetch(collection.artworkUrl512, { method: "HEAD" });
+    if (res512.ok) return collection.artworkUrl512;
+  } catch {}
+  return collection.artworkUrl100 ?? null;
+}
+
+// Match a list of local album titles to iTunes collections using Levenshtein scoring
+// Returns a map of albumKey -> resolved art URL
+async function matchAlbumsToCollections(
+  albums: { aKey: string; title: string }[],
+  collections: ItunesCollection[]
 ): Promise<Map<string, string>> {
   const result = new Map<string, string>();
-  if (albums.length === 0) return result;
+  if (albums.length === 0 || collections.length === 0) return result;
 
-  const tasks = albums.map(({ aKey, artist, title }) => async () => {
-    const url = await fetchItunesArt(artist, title);
-    if (url) result.set(aKey, url);
-  });
+  const normAlbums = albums.map(a => normaliseForMatch(a.title));
+  const normCollections = collections.map(c => normaliseForMatch(c.collectionName));
 
-  await pLimit(tasks, 8);
+  // Build score matrix
+  const scoreMatrix: { albumIndex: number; collectionIndex: number; score: number }[] = [];
+  for (let ai = 0; ai < normAlbums.length; ai++) {
+    for (let ci = 0; ci < normCollections.length; ci++) {
+      const score = similarity(normAlbums[ai], normCollections[ci]);
+      if (score >= MIN_SCORE) {
+        scoreMatrix.push({ albumIndex: ai, collectionIndex: ci, score });
+      }
+    }
+  }
+
+  // Sort by score descending
+  scoreMatrix.sort((a, b) => b.score - a.score);
+
+  const assignedAlbums = new Set<number>();
+  const assignedCollections = new Set<number>();
+
+  // Assign best matches greedily — perfect matches first
+  for (const match of scoreMatrix) {
+    if (assignedAlbums.has(match.albumIndex)) continue;
+    if (assignedCollections.has(match.collectionIndex)) continue;
+
+    assignedAlbums.add(match.albumIndex);
+    assignedCollections.add(match.collectionIndex);
+
+    const collection = collections[match.collectionIndex];
+    collection._assigned = true;
+
+    // Resolve art URL (512 preferred, 100 fallback)
+    const url = await resolveArtUrl(collection);
+    if (url) {
+      result.set(albums[match.albumIndex].aKey, url);
+    }
+  }
+
   return result;
 }
 
@@ -459,7 +521,7 @@ export function useMediaLibrary() {
         }
       }
 
-      // Split into cached (skip re-read) vs new/changed
+      // Split into cached vs new/changed
       const newAssets: MediaLibrary.Asset[] = [];
       const cachedAssets: MediaLibrary.Asset[] = [];
 
@@ -491,7 +553,6 @@ export function useMediaLibrary() {
           const meta = await readMetadata(asset.uri, asset.filename);
           const aKey = albumKey(meta.artist, meta.album);
 
-          // Disk cache only — no network in phase 1
           if (!artCache.has(aKey)) {
             const existing = await artFileExists(aKey);
             if (existing) {
@@ -557,43 +618,42 @@ export function useMediaLibrary() {
         fetchingArtAlbumIds: new Set(),
       });
 
-      // ── Phase 2: iTunes art fetch in background ───────────────────────────
-      // Collect unique albums still missing art
-      const albumsMissingArt: { aKey: string; artist: string; title: string }[] = [];
+      // ── Phase 2: iTunes art — one query per artist ────────────────────────
+      // Group albums missing art by artist
+      const artistAlbums = new Map<string, { aKey: string; title: string }[]>();
       const seen = new Set<string>();
       for (const track of tracks) {
         if (
-          !artCache.get(track.albumId) &&
-          !isUnknown(track.artist) &&
-          !isUnknown(track.album) &&
-          !seen.has(track.albumId)
-        ) {
+          artCache.get(track.albumId) ||
+          isUnknown(track.artist) ||
+          isUnknown(track.album)
+        ) continue;
+        if (!seen.has(track.albumId)) {
           seen.add(track.albumId);
-          albumsMissingArt.push({
-            aKey: track.albumId,
-            artist: track.artist,
-            title: track.album,
-          });
+          if (!artistAlbums.has(track.artist)) artistAlbums.set(track.artist, []);
+          artistAlbums.get(track.artist)!.push({ aKey: track.albumId, title: track.album });
         }
       }
 
-      if (albumsMissingArt.length > 0) {
-        // Mark all as fetching so spinners appear
-        setState((s) => ({
-          ...s,
-          fetchingArtAlbumIds: new Set(albumsMissingArt.map(a => a.aKey)),
-        }));
+      if (artistAlbums.size > 0) {
+        // Mark all as fetching
+        const allMissingIds = new Set<string>();
+        for (const albumList of artistAlbums.values()) {
+          albumList.forEach(a => allMissingIds.add(a.aKey));
+        }
+        setState((s) => ({ ...s, fetchingArtAlbumIds: allMissingIds }));
 
-        // Process in chunks of 20 for incremental UI updates
-        const CHUNK_SIZE = 20;
-        for (let i = 0; i < albumsMissingArt.length; i += CHUNK_SIZE) {
+        for (const [artistName, albumList] of artistAlbums) {
           if (cancelled.current) break;
 
-          const chunk = albumsMissingArt.slice(i, i + CHUNK_SIZE);
-          const artResults = await fetchItunesArtForAlbums(chunk);
+          // One iTunes query gets all albums for this artist
+          const collections = await fetchArtistCollections(artistName);
 
-          // Apply results
-          for (const { aKey } of chunk) {
+          // Match local albums to iTunes collections using Levenshtein scoring
+          const artResults = await matchAlbumsToCollections(albumList, collections);
+
+          // Apply results to tracks
+          for (const { aKey } of albumList) {
             const url = artResults.get(aKey) ?? null;
             if (url) {
               artCache.set(aKey, url);
@@ -603,17 +663,16 @@ export function useMediaLibrary() {
             }
           }
 
-          // Push incremental update after each chunk
+          // Push incremental update after each artist
           const sortedTracks = [...tracks].sort((a, b) => a.title.localeCompare(b.title));
           const { albums, artists } = buildLibrary(tracks);
           setState((s) => {
             const next = new Set(s.fetchingArtAlbumIds);
-            chunk.forEach(({ aKey }) => next.delete(aKey));
+            albumList.forEach(({ aKey }) => next.delete(aKey));
             return { ...s, tracks: sortedTracks, albums, artists, fetchingArtAlbumIds: next };
           });
         }
 
-        // Save final art cache
         await saveArtCache(tracks);
       }
 
