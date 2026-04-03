@@ -1,4 +1,4 @@
-import { Stack } from "expo-router";
+import { Stack, useSegments, router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useRef } from "react";
 import * as SplashScreen from "expo-splash-screen";
@@ -6,7 +6,6 @@ import { useFonts } from "expo-font";
 import { View, StyleSheet, AppState } from "react-native";
 import TrackPlayer from "react-native-track-player";
 import { useActiveTrack, usePlaybackState, State } from "react-native-track-player";
-import { router } from "expo-router";
 import { InvertColorsProvider, useInvertColors } from "@/contexts/InvertColorsContext";
 import { HapticProvider } from "@/contexts/HapticContext";
 import { PlayerProvider } from "@/contexts/PlayerContext";
@@ -30,24 +29,27 @@ function AppShell() {
   const isPlaying = playbackState.state === State.Playing;
   const appState = useRef(AppState.currentState);
 
-  // Open now playing when app comes back to foreground if playing
-  useEffect(() => {
-    const sub = AppState.addEventListener("change", (nextState) => {
-      if (
-        appState.current.match(/inactive|background/) &&
-        nextState === "active"
-      ) {
-        // App came to foreground
-        TrackPlayer.getPlaybackState().then((state) => {
-          if (state.state === State.Playing) {
-            router.push("/nowplaying");
-          }
-        });
-      }
-      appState.current = nextState;
-    });
-    return () => sub.remove();
-  }, []);
+const segments = useSegments();
+
+useEffect(() => {
+  const sub = AppState.addEventListener("change", (nextState) => {
+    if (
+      appState.current.match(/inactive|background/) &&
+      nextState === "active"
+    ) {
+      TrackPlayer.getPlaybackState().then((state) => {
+        if (
+          state.state === State.Playing &&
+          !segments.includes("nowplaying" as never)
+        ) {
+          router.push("/nowplaying");
+        }
+      });
+    }
+    appState.current = nextState;
+  });
+  return () => sub.remove();
+}, [segments]);
 
   return (
     <View style={[styles.root, { backgroundColor: bg }]}>
