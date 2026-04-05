@@ -63,6 +63,12 @@ export default function NowPlayingScreen() {
   useEffect(() => { isPlayingRef.current = isPlaying; }, [isPlaying]);
 
   useEffect(() => {
+    seekAnim.stopAnimation();
+    seekAnim.setValue(0);
+    setLabelSecs(0);
+  }, [activeTrack?.id]);
+
+  useEffect(() => {
     if (isDragging.current) return;
     if (duration <= 0) return;
     const ratio = Math.min(1, position / duration);
