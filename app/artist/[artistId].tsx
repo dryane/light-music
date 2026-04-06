@@ -66,21 +66,27 @@ export default function ArtistScreen() {
     if (s.length > 0) playTrack(s[0], s);
   };
 
-  type ListItem =
-    | { type: "albumsHeader" }
-    | { type: "album"; album: Album }
-    | { type: "singlesHeader" }
-    | { type: "single"; track: Track };
+type ListItem =
+  | { type: "header" }
+  | { type: "albumsHeader" }
+  | { type: "album"; album: Album }
+  | { type: "singlesHeader" }
+  | { type: "single"; track: Track };
 
-  const listData: ListItem[] = [];
-  if (albums.length > 0) {
-    listData.push({ type: "albumsHeader" });
-    albums.forEach((a) => listData.push({ type: "album", album: a }));
-  }
-  if (singleTracks.length > 0) {
-    listData.push({ type: "singlesHeader" });
-    singleTracks.forEach((t) => listData.push({ type: "single", track: t }));
-  }
+const listData: ListItem[] = [{ type: "header" }];
+if (albums.length > 0) {
+  listData.push({ type: "albumsHeader" });
+  albums.forEach((a) => listData.push({ type: "album", album: a }));
+}
+if (singleTracks.length > 0) {
+  listData.push({ type: "singlesHeader" });
+  singleTracks.forEach((t) => listData.push({ type: "single", track: t }));
+}
+    const stickyIndices = listData
+      .map((item, index) =>
+        item.type === "albumsHeader" || item.type === "singlesHeader" ? index : null
+      )
+      .filter((i): i is number => i !== null);
 
   const renderItem = ({ item }: { item: ListItem }) => {
     if (item.type === "albumsHeader" || item.type === "singlesHeader") {
@@ -92,6 +98,29 @@ export default function ArtistScreen() {
         </View>
       );
     }
+if (item.type === "header") {
+  return (
+    <View style={[styles.header, { borderBottomColor: border }]}>
+      <View style={styles.headerLeft}>
+        <StyledText style={[styles.artistName, { color: fg }]} numberOfLines={1}>
+          {artist.name}
+        </StyledText>
+        <StyledText style={[styles.artistMeta, { color: fgMuted }]}>
+          {albums.length > 0 ? `${albums.length} ${albums.length === 1 ? "album" : "albums"} · ` : ""}
+          {allTracks.length} songs
+        </StyledText>
+      </View>
+      <View style={styles.headerIcons}>
+        <TouchableOpacity onPress={playAll} hitSlop={12}>
+          <FontAwesome5 name="play" size={16} color={fg} solid />
+        </TouchableOpacity>
+        <TouchableOpacity onPress={shuffle} hitSlop={12}>
+          <FontAwesome5 name="random" size={16} color={fgMuted} solid />
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
 
     if (item.type === "album") {
       const a = item.album;
@@ -140,32 +169,13 @@ export default function ArtistScreen() {
     >
       <FlatList
         data={listData}
+        stickyHeaderIndices={stickyIndices}
+  ListHeaderComponentStyle={{ zIndex: 0 }}
         keyExtractor={(item, index) => {
           if (item.type === "album") return item.album.id;
           if (item.type === "single") return item.track.id;
           return item.type + index;
         }}
-        ListHeaderComponent={
-          <View style={[styles.header, { borderBottomColor: border }]}>
-            <View style={styles.headerLeft}>
-              <StyledText style={[styles.artistName, { color: fg }]} numberOfLines={1}>
-                {artist.name}
-              </StyledText>
-              <StyledText style={[styles.artistMeta, { color: fgMuted }]}>
-                {albums.length > 0 ? `${albums.length} ${albums.length === 1 ? "album" : "albums"} · ` : ""}
-                {allTracks.length} songs
-              </StyledText>
-            </View>
-            <View style={styles.headerIcons}>
-              <TouchableOpacity onPress={playAll} hitSlop={12}>
-                <FontAwesome5 name="play" size={16} color={fg} solid />
-              </TouchableOpacity>
-              <TouchableOpacity onPress={shuffle} hitSlop={12}>
-                <FontAwesome5 name="random" size={16} color={fgMuted} solid />
-              </TouchableOpacity>
-            </View>
-          </View>
-        }
         renderItem={renderItem}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 16 }]}

@@ -9,8 +9,10 @@ interface MusicContextType {
   artists: Artist[];
   loading: boolean;
   scanProgress: number;
+  scanStatus: string;
   error: string | null;
   permissionGranted: boolean;
+  fetchingArtAlbumIds: Set<string>;
   requestPermission: () => Promise<void>;
   refresh: () => Promise<void>;
 }

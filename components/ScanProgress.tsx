@@ -1,81 +1,93 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState, useCallback } from "react";
 import { View, StyleSheet, Animated } from "react-native";
 import { StyledText } from "@/components/StyledText";
 import { useInvertColors } from "@/contexts/InvertColorsContext";
+import { Easing } from "react-native";
 
 interface ScanProgressProps {
-  progress: number; // 0–1
+  progress: number;
+  status?: string;
 }
 
-function WaveBar({ delay, color }: { delay: number; color: string }) {
-  const anim = useRef(new Animated.Value(0.3)).current;
+const BAR_COUNT = 8;
+const DELAYS = [0, 100, 200, 300, 400, 300, 200, 100];
+const anims = Array.from({ length: BAR_COUNT }, () => new Animated.Value(0.3));
 
-  useEffect(() => {
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.delay(delay),
-        Animated.timing(anim, {
-          toValue: 1,
-          duration: 400,
-          useNativeDriver: true,
-        }),
-        Animated.timing(anim, {
-          toValue: 0.3,
-          duration: 400,
-          useNativeDriver: true,
-        }),
-      ])
-    );
-    loop.start();
-    return () => loop.stop();
-  }, []);
+let intervalId: any = null;
+let startTime: number | null = null;
 
+function startAnims() {
+  if (intervalId) return;
+  startTime = Date.now();
+  intervalId = setInterval(() => {
+    const elapsed = Date.now() - startTime!;
+    anims.forEach((anim, i) => {
+      // Each bar is offset by its delay, creating a pure sine wave
+      const phase = ((elapsed - DELAYS[i]) / 800) * Math.PI * 2;
+      const value = 0.3 + ((Math.sin(phase) + 1) / 2) * 0.7;
+      anim.setValue(value);
+    });
+  }, 16); // ~60fps
+}
+
+function stopAnims() {
+  if (intervalId) {
+    clearInterval(intervalId);
+    intervalId = null;
+  }
+  anims.forEach(anim => anim.setValue(0.3));
+}
+
+// Static bar components — never re-render
+const Bar = React.memo(({ anim, color }: { anim: Animated.Value; color: string }) => {
+  const scaleY = anim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.3, 1],
+  });
   return (
     <Animated.View
       style={[
         styles.bar,
-        {
-          backgroundColor: color,
-          transform: [{ scaleY: anim }],
-        },
+        { backgroundColor: color, transform: [{ scaleY }] },
       ]}
     />
   );
-}
+});
 
-export function ScanProgress({ progress }: ScanProgressProps) {
+const Waveform = React.memo(({ color }: { color: string }) => (
+  <View style={styles.waveform}>
+    {anims.map((anim, i) => (
+      <Bar key={i} anim={anim} color={color} />
+    ))}
+  </View>
+));
+
+export function ScanProgress({ progress, status }: ScanProgressProps) {
   const { invertColors } = useInvertColors();
   const fg = invertColors ? "#000000" : "#ffffff";
   const fgMuted = invertColors ? "#888888" : "#484848";
   const trackBg = invertColors ? "#e0e0e0" : "#1e1e1e";
 
-  const delays = [0, 80, 160, 240, 320, 240, 160, 80];
+    useEffect(() => {
+      startAnims();
+      return () => {
+        anims.forEach(anim => anim.stopAnimation());
+      };
+    }, []);
+
+//     <View style={styles.container}>
+//       <Waveform color={fg} />
+// Temp removed Waveform
 
   return (
     <View style={styles.container}>
-      {/* Animated waveform */}
-      <View style={styles.waveform}>
-        {delays.map((d, i) => (
-          <WaveBar key={i} delay={d} color={fg} />
-        ))}
-      </View>
-
       <StyledText style={[styles.label, { color: fg }]}>Scanning Library</StyledText>
-      <StyledText style={[styles.sub, { color: fgMuted }]}>
-        {progress < 0.3
-          ? "Reading your music files…"
-          : progress < 0.7
-          ? "Extracting metadata…"
-          : "Fetching album artwork…"}
+      <StyledText style={[styles.sub, { color: fgMuted }]} numberOfLines={1}>
+        {status || "Reading your music files…"}
       </StyledText>
-
-      {/* Progress bar */}
       <View style={[styles.track, { backgroundColor: trackBg }]}>
         <View
-          style={[
-            styles.fill,
-            { backgroundColor: fg, width: `${Math.round(progress * 100)}%` },
-          ]}
+          style={[styles.fill, { backgroundColor: fg, width: `${Math.round(progress * 100)}%` }]}
         />
       </View>
       <StyledText style={[styles.pct, { color: fgMuted }]}>

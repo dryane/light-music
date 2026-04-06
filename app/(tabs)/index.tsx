@@ -35,7 +35,7 @@ function buildSections(artists: Artist[]) {
 
 export default function ArtistListScreen() {
   const { invertColors } = useInvertColors();
-  const { artists, loading, scanProgress, error, permissionGranted, requestPermission } = useMusic();
+  const { artists, loading, scanProgress, scanStatus, error, permissionGranted, requestPermission } = useMusic();
   const insets = useSafeAreaInsets();
 
   const fg = invertColors ? "#000000" : "#ffffff";
@@ -80,13 +80,15 @@ export default function ArtistListScreen() {
     );
   }
 
-  if (loading && scanProgress < 1) {
-    return (
-      <View style={[styles.root, { backgroundColor: bg, paddingTop: insets.top }]}>
-        <ScanProgress progress={scanProgress} />
-      </View>
-    );
-  }
+    if (loading && scanProgress < 1) {
+      return (
+        <View style={[styles.root, { backgroundColor: bg, paddingTop: insets.top }]}>
+          <View style={StyleSheet.absoluteFill}>
+            <ScanProgress progress={scanProgress} status={scanStatus} />
+          </View>
+        </View>
+      );
+    }
 
   if (error) {
     return (

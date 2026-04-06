@@ -16,10 +16,11 @@ import { useInvertColors } from "@/contexts/InvertColorsContext";
 import { useMusic } from "@/contexts/MusicContext";
 import { usePlayer } from "@/contexts/PlayerContext";
 import { useSwipeBack } from "@/hooks/useSwipeBack";
+import { Track } from "@/types/music";
 
 export default function AlbumScreen() {
   const { albumId } = useLocalSearchParams<{ albumId: string }>();
-  const { albums } = useMusic();
+  const { albums, fetchingArtAlbumIds = new Set() } = useMusic();
   const { playTrack } = usePlayer();
   const { invertColors } = useInvertColors();
   const insets = useSafeAreaInsets();
@@ -32,6 +33,7 @@ export default function AlbumScreen() {
   const sectionBg = invertColors ? "#f0f0f0" : "#080808";
 
   const album = albums.find((a) => a.id === albumId);
+  const isArtLoading = album ? fetchingArtAlbumIds.has(album.id) : false;
 
   if (!album) {
     return (
@@ -53,32 +55,66 @@ export default function AlbumScreen() {
     if (s.length > 0) playTrack(s[0], s);
   };
 
-  const Header = () => (
-    <>
-      <View style={[styles.header, { borderBottomColor: border }]}>
-        <AlbumArt uri={album.albumArt} size={52} radius={4} />
-        <View style={styles.headerInfo}>
-          <StyledText style={[styles.albumTitle, { color: fg }]} numberOfLines={1}>
-            {album.title}
-          </StyledText>
-          <StyledText style={[styles.albumMeta, { color: fgMuted }]}>
-            {[album.year, `${tracks.length} songs`].filter(Boolean).join(" · ")}
-          </StyledText>
+  type ListItem =
+    | { type: "header" }
+    | { type: "tracksHeader" }
+    | { type: "track"; track: Track; index: number };
+
+  const listData: ListItem[] = [
+    { type: "header" },
+    { type: "tracksHeader" },
+    ...tracks.map((track, index) => ({ type: "track" as const, track, index })),
+  ];
+
+  const stickyIndices = listData
+    .map((item, i) => item.type === "tracksHeader" ? i : null)
+    .filter((i): i is number => i !== null);
+
+  const renderItem = ({ item }: { item: ListItem }) => {
+    if (item.type === "header") {
+      return (
+        <View style={[styles.header, { borderBottomColor: border }]}>
+          <AlbumArt uri={album.albumArt} size={52} radius={4} loading={isArtLoading} />
+          <View style={styles.headerInfo}>
+            <StyledText style={[styles.albumTitle, { color: fg }]} numberOfLines={1}>
+              {album.title}
+            </StyledText>
+            <StyledText style={[styles.albumMeta, { color: fgMuted }]}>
+              {[album.year, `${tracks.length} songs`].filter(Boolean).join(" · ")}
+            </StyledText>
+          </View>
+          <View style={styles.headerIcons}>
+            <TouchableOpacity onPress={playAlbum} hitSlop={12}>
+              <FontAwesome5 name="play" size={16} color={fg} solid />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={shuffleAlbum} hitSlop={12}>
+              <FontAwesome5 name="random" size={16} color={fgMuted} solid />
+            </TouchableOpacity>
+          </View>
         </View>
-        <View style={styles.headerIcons}>
-          <TouchableOpacity onPress={playAlbum} hitSlop={12}>
-            <FontAwesome5 name="play" size={16} color={fg} solid />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={shuffleAlbum} hitSlop={12}>
-            <FontAwesome5 name="random" size={16} color={fgMuted} solid />
-          </TouchableOpacity>
+      );
+    }
+
+    if (item.type === "tracksHeader") {
+      return (
+        <View style={[styles.sectionLabel, { backgroundColor: sectionBg, borderBottomColor: border }]}>
+          <StyledText style={[styles.sectionLabelText, { color: fgMuted }]}>TRACKS</StyledText>
         </View>
-      </View>
-      <View style={[styles.sectionLabel, { backgroundColor: sectionBg, borderBottomColor: border }]}>
-        <StyledText style={[styles.sectionLabelText, { color: fgMuted }]}>TRACKS</StyledText>
-      </View>
-    </>
-  );
+      );
+    }
+
+    if (item.type === "track") {
+      return (
+        <TrackRow
+          track={item.track}
+          queue={tracks}
+          trackNumber={item.index + 1}
+        />
+      );
+    }
+
+    return null;
+  };
 
   return (
     <Animated.View
@@ -86,12 +122,13 @@ export default function AlbumScreen() {
       {...panHandlers}
     >
       <FlatList
-        data={tracks}
-        keyExtractor={(item) => item.id}
-        ListHeaderComponent={Header}
-        renderItem={({ item, index }) => (
-          <TrackRow track={item} queue={tracks} trackNumber={index + 1} />
-        )}
+        data={listData}
+        keyExtractor={(item, index) => {
+          if (item.type === "track") return item.track.id;
+          return item.type + index;
+        }}
+        stickyHeaderIndices={stickyIndices}
+        renderItem={renderItem}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 16 }]}
       />

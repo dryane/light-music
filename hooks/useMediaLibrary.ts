@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { AppState } from "react-native";
 import * as MediaLibrary from "expo-media-library";
 import {
   readAsStringAsync,
@@ -17,6 +18,12 @@ const CACHE_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 365;
 const ART_DIR = (cacheDirectory ?? "") + "album-art/";
 const CONCURRENCY = 4;
 
+// Set to true to only scan the Light Phone music folder
+// Set to false to scan all audio on the device
+const LIGHT_PHONE_MODE = true;
+
+const LIGHT_PHONE_MUSIC_PATH = "/Download/Persisted/Music/";
+
 // Minimum similarity score (0-1) to accept an album art match
 const MIN_SCORE = 0.7;
 
@@ -33,6 +40,7 @@ interface ScanState {
   error: string | null;
   permissionGranted: boolean;
   fetchingArtAlbumIds: Set<string>;
+  scanStatus: string;
 }
 
 interface CachedLibrary {
@@ -53,12 +61,10 @@ function normalise(str: string) {
     .replace(/[\u2013\u2014]/g, "-");
 }
 
-// Strip to alphanumeric only for fuzzy matching
 function normaliseForMatch(str: string): string {
   return str.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
 }
 
-// Levenshtein similarity — returns 0 to 1
 function similarity(a: string, b: string): number {
   if (a === b) return 1;
   if (!a.length || !b.length) return 0;
@@ -183,12 +189,8 @@ interface ItunesCollection {
   _assigned: boolean;
 }
 
-// Fetch all albums for an artist from iTunes in two steps:
-// 1. Search for artistId
-// 2. Lookup all collections (albums) for that artist
 async function fetchArtistCollections(artistName: string): Promise<ItunesCollection[]> {
   try {
-    // Step 1: get artistId
     const searchRes = await fetch(
       `https://itunes.apple.com/search?term=${encodeURIComponent(artistName)}&entity=musicArtist&limit=1`
     );
@@ -197,7 +199,6 @@ async function fetchArtistCollections(artistName: string): Promise<ItunesCollect
     const artistId = searchData.results?.[0]?.artistId;
     if (!artistId) return [];
 
-    // Step 2: get all albums for this artist
     const res = await fetch(
       `https://itunes.apple.com/lookup?id=${artistId}&entity=album&limit=200`
     );
@@ -217,7 +218,6 @@ async function fetchArtistCollections(artistName: string): Promise<ItunesCollect
   }
 }
 
-// Resolve the best available art URL — prefer 512px, fallback to 100px
 async function resolveArtUrl(collection: ItunesCollection): Promise<string | null> {
   try {
     const res512 = await fetch(collection.artworkUrl512, { method: "HEAD" });
@@ -226,8 +226,6 @@ async function resolveArtUrl(collection: ItunesCollection): Promise<string | nul
   return collection.artworkUrl100 ?? null;
 }
 
-// Match a list of local album titles to iTunes collections using Levenshtein scoring
-// Returns a map of albumKey -> resolved art URL
 async function matchAlbumsToCollections(
   albums: { aKey: string; title: string }[],
   collections: ItunesCollection[]
@@ -238,7 +236,6 @@ async function matchAlbumsToCollections(
   const normAlbums = albums.map(a => normaliseForMatch(a.title));
   const normCollections = collections.map(c => normaliseForMatch(c.collectionName));
 
-  // Build score matrix
   const scoreMatrix: { albumIndex: number; collectionIndex: number; score: number }[] = [];
   for (let ai = 0; ai < normAlbums.length; ai++) {
     for (let ci = 0; ci < normCollections.length; ci++) {
@@ -249,13 +246,11 @@ async function matchAlbumsToCollections(
     }
   }
 
-  // Sort by score descending
   scoreMatrix.sort((a, b) => b.score - a.score);
 
   const assignedAlbums = new Set<number>();
   const assignedCollections = new Set<number>();
 
-  // Assign best matches greedily — perfect matches first
   for (const match of scoreMatrix) {
     if (assignedAlbums.has(match.albumIndex)) continue;
     if (assignedCollections.has(match.collectionIndex)) continue;
@@ -266,7 +261,6 @@ async function matchAlbumsToCollections(
     const collection = collections[match.collectionIndex];
     collection._assigned = true;
 
-    // Resolve art URL (512 preferred, 100 fallback)
     const url = await resolveArtUrl(collection);
     if (url) {
       result.set(albums[match.albumIndex].aKey, url);
@@ -394,7 +388,6 @@ function buildLibrary(tracks: Track[]): { albums: Album[]; artists: Artist[] } {
     });
   }
 
-  // Remove unknown artists — catches podcasts, tones, system sounds
   for (const [key, artist] of artistMap.entries()) {
     if (isUnknown(artist.name)) artistMap.delete(key);
   }
@@ -429,8 +422,12 @@ export function useMediaLibrary() {
     error: null,
     permissionGranted: false,
     fetchingArtAlbumIds: new Set(),
+    scanStatus: "",
   });
   const cancelled = useRef(false);
+  const cacheRef = useRef<CachedLibrary | null>(null);
+  const appState = useRef(AppState.currentState);
+  const scanInProgress = useRef(false);
 
   const loadCache = useCallback(async (): Promise<CachedLibrary | null> => {
     try {
@@ -450,6 +447,7 @@ export function useMediaLibrary() {
     try {
       const cache: CachedLibrary = { tracks, timestamp: Date.now(), assetCount, assetModTimes };
       await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(cache));
+      cacheRef.current = cache;
     } catch {}
   }, []);
 
@@ -474,11 +472,12 @@ export function useMediaLibrary() {
   }, []);
 
   const scan = useCallback(async (silent = false, existingCache?: CachedLibrary | null) => {
+    if (scanInProgress.current) return;
+    scanInProgress.current = true;
     cancelled.current = false;
     if (!silent) setState((s) => ({ ...s, loading: true, scanProgress: 0, error: null }));
 
     try {
-      // Scan all audio files
       let assets: MediaLibrary.Asset[] = [];
       let after: string | undefined;
       let hasMore = true;
@@ -494,6 +493,12 @@ export function useMediaLibrary() {
         after = page.endCursor;
       }
 
+      if (LIGHT_PHONE_MODE) {
+        assets = assets.filter((asset) =>
+          asset.uri.includes(LIGHT_PHONE_MUSIC_PATH)
+        );
+      }
+
       if (cancelled.current) return;
 
       await ensureArtDir();
@@ -505,14 +510,11 @@ export function useMediaLibrary() {
       }
       const cachedModTimes = existingCache?.assetModTimes ?? {};
 
-      // Load saved art URLs into artCache
       const savedArtMap = await loadArtCache();
       for (const [albumId, artPath] of Object.entries(savedArtMap)) {
         artCache.set(albumId, artPath);
       }
 
-      // Pre-populate from existing cached tracks so background rescans
-      // skip albums we already have art for
       if (existingCache?.tracks) {
         for (const t of existingCache.tracks) {
           if (t.albumArt && !artCache.has(t.albumId)) {
@@ -521,7 +523,6 @@ export function useMediaLibrary() {
         }
       }
 
-      // Split into cached vs new/changed
       const newAssets: MediaLibrary.Asset[] = [];
       const cachedAssets: MediaLibrary.Asset[] = [];
 
@@ -543,7 +544,7 @@ export function useMediaLibrary() {
         tracks.push({ ...cached, albumArt: resolvedArt });
       }
 
-      // ── Phase 1: Metadata only — fast, concurrent, no network ─────────────
+      // ── Phase 1: Metadata only ────────────────────────────────────────────
       if (newAssets.length > 0) {
         let processed = 0;
 
@@ -588,6 +589,7 @@ export function useMediaLibrary() {
             setState((s) => ({
               ...s,
               scanProgress: (cachedAssets.length + processed) / assets.length,
+              scanStatus: `${meta.artist ?? "Unknown"} — ${meta.album ?? "Unknown"}`,
             }));
           }
         });
@@ -613,13 +615,13 @@ export function useMediaLibrary() {
         artists: lib1.artists,
         loading: false,
         scanProgress: 1,
+        scanStatus: "",
         error: null,
         permissionGranted: true,
         fetchingArtAlbumIds: new Set(),
       });
 
-      // ── Phase 2: iTunes art — one query per artist ────────────────────────
-      // Group albums missing art by artist
+      // ── Phase 2: iTunes art ───────────────────────────────────────────────
       const artistAlbums = new Map<string, { aKey: string; title: string }[]>();
       const seen = new Set<string>();
       for (const track of tracks) {
@@ -636,7 +638,6 @@ export function useMediaLibrary() {
       }
 
       if (artistAlbums.size > 0) {
-        // Mark all as fetching
         const allMissingIds = new Set<string>();
         for (const albumList of artistAlbums.values()) {
           albumList.forEach(a => allMissingIds.add(a.aKey));
@@ -646,13 +647,9 @@ export function useMediaLibrary() {
         for (const [artistName, albumList] of artistAlbums) {
           if (cancelled.current) break;
 
-          // One iTunes query gets all albums for this artist
           const collections = await fetchArtistCollections(artistName);
-
-          // Match local albums to iTunes collections using Levenshtein scoring
           const artResults = await matchAlbumsToCollections(albumList, collections);
 
-          // Apply results to tracks
           for (const { aKey } of albumList) {
             const url = artResults.get(aKey) ?? null;
             if (url) {
@@ -663,7 +660,6 @@ export function useMediaLibrary() {
             }
           }
 
-          // Push incremental update after each artist
           const sortedTracks = [...tracks].sort((a, b) => a.title.localeCompare(b.title));
           const { albums, artists } = buildLibrary(tracks);
           setState((s) => {
@@ -682,6 +678,8 @@ export function useMediaLibrary() {
         loading: false,
         error: e?.message ?? "Failed to scan music library",
       }));
+    } finally {
+      scanInProgress.current = false;
     }
   }, [saveCache, saveArtCache, loadArtCache]);
 
@@ -703,6 +701,8 @@ export function useMediaLibrary() {
       setState((s) => ({ ...s, permissionGranted: true }));
 
       const cache = await loadCache();
+      cacheRef.current = cache;
+
       if (cache && cache.tracks.length > 0) {
         const artMap = await loadArtCache();
         const tracksWithArt = cache.tracks.map((t) => ({
@@ -716,6 +716,7 @@ export function useMediaLibrary() {
           artists,
           loading: false,
           scanProgress: 1,
+          scanStatus: "",
           error: null,
           permissionGranted: true,
           fetchingArtAlbumIds: new Set(),
@@ -726,7 +727,21 @@ export function useMediaLibrary() {
       }
     })();
 
-    return () => { cancelled.current = true; };
+    // Rescan silently when app comes to foreground
+    const sub = AppState.addEventListener("change", (nextState) => {
+      if (
+        appState.current.match(/inactive|background/) &&
+        nextState === "active"
+      ) {
+        scan(true, cacheRef.current);
+      }
+      appState.current = nextState;
+    });
+
+    return () => {
+      cancelled.current = true;
+      sub.remove();
+    };
   }, []);
 
   return {
