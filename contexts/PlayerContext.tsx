@@ -161,6 +161,13 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     }, 1000);
   }, []);
 
+    useEffect(() => {
+      if (!currentTrack?.albumArt) return;
+      TrackPlayer.updateNowPlayingMetadata({
+        artwork: currentTrack.albumArt,
+      });
+    }, [currentTrack?.albumArt]);
+
   // ─── Playback methods ─────────────────────────────────────────────────────
 
   const playTrack = useCallback(async (track: Track, newQueue?: Track[]) => {
