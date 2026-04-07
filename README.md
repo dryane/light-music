@@ -10,6 +10,8 @@ A minimal music app for the Light Phone 3.
 
 ## Planned features
 
+- More stripped back UI to match Light Phone
+
 ## Known issues
 
 ## Installation
