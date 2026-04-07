@@ -19,7 +19,7 @@ ctx.fillRect(0, 0, width, height);
 const appConfig = JSON.parse(fs.readFileSync("app.json", "utf8"));
 const appName = appConfig.expo.name;
 
-const firstLetter = '♪';
+const firstLetter = appName.charAt(0).toUpperCase();
 const iconSize = 150;
 const iconCanvas = createCanvas(iconSize, iconSize);
 const iconCtx = iconCanvas.getContext("2d");
@@ -28,7 +28,7 @@ iconCtx.fillStyle = "black";
 iconCtx.fillRect(0, 0, iconSize, iconSize);
 
 iconCtx.fillStyle = "white";
-iconCtx.font = "128.1px Arial";
+iconCtx.font = "128.1px PublicSans";
 iconCtx.textAlign = "center";
 iconCtx.textBaseline = "alphabetic";
 const iconMetrics = iconCtx.measureText(firstLetter);

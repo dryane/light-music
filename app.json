@@ -1,8 +1,8 @@
 {
   "expo": {
-    "name": "Light Music",
-    "slug": "light-music",
-    "version": "1.0.7",
+    "name": "Tunes",
+    "slug": "tunes",
+    "version": "1.0.8",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -12,7 +12,7 @@
       "backgroundColor": "#000000"
     },
     "android": {
-      "versionCode": 8,
+      "versionCode": 9,
       "package": "dev.danieljosephryan.lightmusic",
       "newArchEnabled": false,
       "adaptiveIcon": {
@@ -37,7 +37,7 @@
         }
       ]
     ],
-    "scheme": "lightmusic",
+    "scheme": "tunes",
     "extra": {
       "router": {
         "origin": false
