@@ -7,7 +7,7 @@ registerFont(fontPath, { family: "PublicSans" });
 
 const appConfig = JSON.parse(fs.readFileSync("app.json", "utf8"));
 const appName = appConfig.expo.name;
-const firstLetter = appName.charAt(0).toUpperCase();
+const firstLetter = '♪';
 
 const size = 100;
 const canvas = createCanvas(size, size);
@@ -17,9 +17,10 @@ ctx.fillStyle = "black";
 ctx.fillRect(0, 0, size, size);
 
 ctx.fillStyle = "white";
-ctx.font = "85.4px PublicSans";
+ctx.font = "bold 85.4px Ariel";
 ctx.textAlign = "center";
 ctx.textBaseline = "middle";
+ctx.translate(0,5);
 ctx.fillText(firstLetter, size / 2 - 1, size / 2 + 0.5);
 
 const outputPath = path.join(__dirname, "../assets/images/icon.png");
