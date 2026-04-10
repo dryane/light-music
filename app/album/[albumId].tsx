@@ -34,6 +34,7 @@ export default function AlbumScreen() {
 
   const album = albums.find((a) => a.id === albumId);
   const isArtLoading = album ? fetchingArtAlbumIds.has(album.id) : false;
+  console.log("[ALBUM] render", albumId, Date.now());
 
   if (!album) {
     return (

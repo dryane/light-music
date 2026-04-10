@@ -37,14 +37,16 @@ useEffect(() => {
       appState.current.match(/inactive|background/) &&
       nextState === "active"
     ) {
-      TrackPlayer.getPlaybackState().then((state) => {
-        if (
-          state.state === State.Playing &&
-          !segments.includes("nowplaying" as never)
-        ) {
-          router.push("/nowplaying");
-        }
-      });
+        TrackPlayer.getPlaybackState().then((state) => {
+          if (
+            state.state === State.Playing &&
+            !segments.includes("nowplaying" as never)
+          ) {
+            pushNowPlayingInstant();
+          }
+        }).catch(() => {
+          // Player not yet initialized, ignore
+        });
     }
     appState.current = nextState;
   });

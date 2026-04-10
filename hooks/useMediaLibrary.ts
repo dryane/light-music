@@ -20,7 +20,7 @@ const CONCURRENCY = 4;
 
 // Set to true to only scan the Light Phone music folder
 // Set to false to scan all audio on the device
-const LIGHT_PHONE_MODE = true;
+const LIGHT_PHONE_MODE = false;
 
 const LIGHT_PHONE_MUSIC_PATH = "/Download/Persisted/Music/";
 
@@ -471,7 +471,7 @@ export function useMediaLibrary() {
     } catch { return {}; }
   }, []);
 
-  const scan = useCallback(async (silent = false, existingCache?: CachedLibrary | null) => {
+const scan = useCallback(async (silent = false, existingCache?: CachedLibrary | null, skipArt = false) => {
     if (scanInProgress.current) return;
     scanInProgress.current = true;
     cancelled.current = false;
@@ -637,7 +637,7 @@ export function useMediaLibrary() {
         }
       }
 
-      if (artistAlbums.size > 0) {
+      if (artistAlbums.size > 0 && !skipArt) {
         const allMissingIds = new Set<string>();
         for (const albumList of artistAlbums.values()) {
           albumList.forEach(a => allMissingIds.add(a.aKey));
@@ -721,9 +721,9 @@ export function useMediaLibrary() {
           permissionGranted: true,
           fetchingArtAlbumIds: new Set(),
         });
-        setTimeout(() => scan(true, cache), 2000);
+        setTimeout(() => scan(true, cache, true), 2000);
       } else {
-        await scan(false, null);
+        await scan(false, null, false);
       }
     })();
 
@@ -733,7 +733,7 @@ export function useMediaLibrary() {
         appState.current.match(/inactive|background/) &&
         nextState === "active"
       ) {
-        scan(true, cacheRef.current);
+        scan(true, cacheRef.current, true); // ← true = skip art fetch
       }
       appState.current = nextState;
     });

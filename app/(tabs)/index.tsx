@@ -45,6 +45,7 @@ export default function ArtistListScreen() {
   const border = invertColors ? "#e8e8e8" : "#111111";
 
   const sections = useMemo(() => buildSections(artists), [artists]);
+  console.log("[INDEX] render", Date.now());
 
   const navigateToArtist = (artist: Artist) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);

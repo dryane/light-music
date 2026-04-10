@@ -9,7 +9,6 @@ import React, {
 import TrackPlayer, {
   useActiveTrack,
   usePlaybackState,
-  useProgress,
   State,
   Capability,
   AppKilledPlaybackBehavior,
@@ -17,7 +16,7 @@ import TrackPlayer, {
 } from "react-native-track-player";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Track } from "@/types/music";
-import { router } from "expo-router";
+import { pushNowPlayingAnimated } from "@/hooks/useNowPlayingNav";
 
 const STORAGE_KEY = "player_state_v2";
 
@@ -31,8 +30,6 @@ interface PlayerContextType {
   currentTrack: Track | null;
   queue: Track[];
   isPlaying: boolean;
-  positionMs: number;
-  durationMs: number;
   playTrack: (track: Track, queue?: Track[]) => Promise<void>;
   togglePlayPause: () => void;
   skipNext: () => Promise<void>;
@@ -43,7 +40,6 @@ interface PlayerContextType {
 
 const PlayerContext = createContext<PlayerContextType | null>(null);
 
-// Convert our Track type to RNTP's track format
 function toRNTPTrack(track: Track) {
   return {
     id: track.id,
@@ -95,25 +91,20 @@ async function setupPlayer() {
     });
     await TrackPlayer.setRepeatMode(RepeatMode.Off);
     playerSetup = true;
-  } catch (e) {
-    // Player already set up
+  } catch {
     playerSetup = true;
   }
 }
 
 export function PlayerProvider({ children }: { children: React.ReactNode }) {
-  // RNTP hooks — these are the source of truth
   const activeTrack = useActiveTrack();
   const playbackState = usePlaybackState();
-  const progress = useProgress(500); // update every 500ms for persistence
 
-  // Our Track type — mapped from RNTP's active track
   const [currentTrack, setCurrentTrack] = useState<Track | null>(null);
   const [queue, setQueue] = useState<Track[]>([]);
   const [restored, setRestored] = useState(false);
   const [ready, setReady] = useState(false);
 
-  // Keep a ref map of id -> Track so we can look up our full Track objects
   const trackMapRef = useRef<Map<string, Track>>(new Map());
   const queueRef = useRef<Track[]>([]);
   const saveStateRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -121,15 +112,11 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   queueRef.current = queue;
 
   const isPlaying = playbackState.state === State.Playing;
-  const positionMs = Math.round(progress.position * 1000);
-  const durationMs = Math.round(progress.duration * 1000);
 
-  // Setup RNTP on mount
   useEffect(() => {
     setupPlayer().then(() => setReady(true));
   }, []);
 
-  // Sync RNTP active track to our Track type
   useEffect(() => {
     if (!activeTrack?.id) {
       setCurrentTrack(null);
@@ -139,14 +126,23 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     if (track) setCurrentTrack(track);
   }, [activeTrack?.id]);
 
-  // Persist position every 5s while playing
+  // Update Bluetooth/lock screen artwork when track changes
+useEffect(() => {
+  if (!currentTrack?.albumArt || !ready) return;
+  TrackPlayer.updateNowPlayingMetadata({
+    artwork: currentTrack.albumArt,
+  });
+}, [currentTrack?.albumArt, ready]);
+
+  // Persist position every 5s while playing — fetch position directly from RNTP
   useEffect(() => {
     if (!isPlaying || !currentTrack) return;
-    const interval = setInterval(() => {
-      persistState(currentTrack.id, positionMs, queueRef.current);
+    const interval = setInterval(async () => {
+      const progress = await TrackPlayer.getProgress();
+      persistState(currentTrack.id, Math.round(progress.position * 1000), queueRef.current);
     }, 5000);
     return () => clearInterval(interval);
-  }, [isPlaying, currentTrack?.id, positionMs]);
+  }, [isPlaying, currentTrack?.id]);
 
   const persistState = useCallback((trackId: string, posMs: number, q: Track[]) => {
     if (saveStateRef.current) clearTimeout(saveStateRef.current);
@@ -161,15 +157,6 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     }, 1000);
   }, []);
 
-    useEffect(() => {
-      if (!currentTrack?.albumArt) return;
-      TrackPlayer.updateNowPlayingMetadata({
-        artwork: currentTrack.albumArt,
-      });
-    }, [currentTrack?.albumArt]);
-
-  // ─── Playback methods ─────────────────────────────────────────────────────
-
   const playTrack = useCallback(async (track: Track, newQueue?: Track[]) => {
     if (!ready) return;
 
@@ -177,19 +164,16 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     const trackIndex = effectiveQueue.findIndex((t) => t.id === track.id);
     const startIndex = trackIndex >= 0 ? trackIndex : 0;
 
-    // Update our local queue state
     if (newQueue) {
       setQueue(newQueue);
       queueRef.current = newQueue;
-      // Register all tracks in the map
       newQueue.forEach((t) => trackMapRef.current.set(t.id, t));
     } else {
       trackMapRef.current.set(track.id, track);
     }
 
-    router.push("/nowplaying");
+    pushNowPlayingAnimated();
 
-    // Load the queue into RNTP
     await TrackPlayer.reset();
     await TrackPlayer.add(effectiveQueue.map(toRNTPTrack));
     await TrackPlayer.skip(startIndex);
@@ -207,32 +191,26 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   }, [isPlaying]);
 
   const skipNext = useCallback(async () => {
-    try {
-      await TrackPlayer.skipToNext();
-    } catch {}
+    try { await TrackPlayer.skipToNext(); } catch {}
   }, []);
 
   const skipPrev = useCallback(async () => {
-    if (positionMs > 5000) {
-        console.log(1);
+    const progress = await TrackPlayer.getProgress();
+    if (progress.position * 1000 > 5000) {
       await TrackPlayer.seekTo(0);
       return;
     }
-    try {
-      await TrackPlayer.skipToPrevious();
-    } catch {}
-  }, [positionMs]);
+    try { await TrackPlayer.skipToPrevious(); } catch {}
+  }, []);
 
   const seekTo = useCallback((ms: number) => {
     TrackPlayer.seekTo(ms / 1000);
   }, []);
 
-  // Restore last session once library loads
   const restoreFromLibrary = useCallback(async (allTracks: Track[]) => {
     if (restored || !ready) return;
     setRestored(true);
 
-    // Register all tracks in the map
     allTracks.forEach((t) => trackMapRef.current.set(t.id, t));
 
     try {
@@ -254,7 +232,6 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       queueRef.current = restoredQueue;
       setCurrentTrack(track);
 
-      // Load into RNTP but don't auto-play
       await TrackPlayer.reset();
       await TrackPlayer.add(restoredQueue.map(toRNTPTrack));
       await TrackPlayer.skip(Math.max(0, trackIndex));
@@ -271,8 +248,6 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         currentTrack,
         queue,
         isPlaying,
-        positionMs,
-        durationMs,
         playTrack,
         togglePlayPause,
         skipNext,

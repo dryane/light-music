@@ -41,6 +41,7 @@ export default function ArtistScreen() {
   const sectionBg = invertColors ? "#f0f0f0" : "#080808";
 
   const artist = artists.find((a) => a.id === artistId);
+  console.log("[ARTIST] render", artistId, Date.now());
 
   if (!artist) {
     return (

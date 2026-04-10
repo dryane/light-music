@@ -27,6 +27,7 @@ export function TrackRow({ track, queue, trackNumber }: TrackRowProps) {
   const fgMuted = invertColors ? "#888888" : "#3a3a3a";
   const activeFg = invertColors ? "#000000" : "#ffffff";
   const border = invertColors ? "#e8e8e8" : "#0e0e0e";
+  console.log("[TRACKROW] render", track.id, Date.now());
 
   return (
     <TouchableOpacity
