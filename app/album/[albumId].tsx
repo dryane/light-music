@@ -108,7 +108,7 @@ export default function AlbumScreen() {
         <TrackRow
           track={item.track}
           queue={tracks}
-          trackNumber={item.index + 1}
+          trackNumber={item.track.trackNumber}
         />
       );
     }
