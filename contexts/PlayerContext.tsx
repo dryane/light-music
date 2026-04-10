@@ -213,7 +213,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const skipPrev = useCallback(async () => {
-    if (positionMs > 3000) {
+    if (positionMs > 5000) {
+        console.log(1);
       await TrackPlayer.seekTo(0);
       return;
     }
