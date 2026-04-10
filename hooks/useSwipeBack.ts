@@ -4,8 +4,8 @@ import { router } from "expo-router";
 import { useIsFocused } from "@react-navigation/native";
 
 const SCREEN_W = Dimensions.get("window").width;
-const DISMISS_THRESHOLD = SCREEN_W * 0.35;
-const DISMISS_VELOCITY = 0.4;
+const DISMISS_THRESHOLD = SCREEN_W * 0.20;
+const DISMISS_VELOCITY = 0.3;
 
 // Module-level — shared across all instances
 // Prevents underlying screens from triggering their own dismiss
