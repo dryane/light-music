@@ -20,7 +20,7 @@ const CONCURRENCY = 4;
 
 // Set to true to only scan the Light Phone music folder
 // Set to false to scan all audio on the device
-const LIGHT_PHONE_MODE = false;
+const LIGHT_PHONE_MODE = true;
 
 const LIGHT_PHONE_MUSIC_PATH = "/Download/Persisted/Music/";
 
