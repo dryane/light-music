@@ -1,12 +1,10 @@
 import TrackPlayer, { Event } from "react-native-track-player";
 
 module.exports = async function () {
-  console.log("[SERVICE] registered");
   TrackPlayer.addEventListener(Event.RemotePlay, () => TrackPlayer.play());
   TrackPlayer.addEventListener(Event.RemotePause, () => TrackPlayer.pause());
   TrackPlayer.addEventListener(Event.RemoteNext, () => TrackPlayer.skipToNext());
   TrackPlayer.addEventListener(Event.RemotePrevious, async () => {
-    console.log("[SERVICE] RemotePrevious fired");
     const progress = await TrackPlayer.getProgress();
     if (progress.position > 5) {
       await TrackPlayer.seekTo(0);
@@ -27,4 +25,8 @@ module.exports = async function () {
       await TrackPlayer.play();
     }
   });
+    TrackPlayer.addEventListener(Event.PlaybackQueueEnded, async ({ position, track }) => {
+        // Queue finished — reset player to clear active track, mini player, and notification
+        await TrackPlayer.reset();
+      });
 };

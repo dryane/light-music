@@ -15,8 +15,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { usePlayer } from "@/contexts/PlayerContext";
 import { useTheme } from "@/hooks/useTheme";
 import { setGlobalDismissing } from "@/hooks/useSwipeBack";
-import { NowPlayingViewFull } from "@/app/views/NowPlayingViewFull";
-import { NowPlayingViewLight } from "@/app/views/NowPlayingViewLight";
+import { NowPlayingViewFull } from "@/views/NowPlayingViewFull";
+import { NowPlayingViewLight } from "@/views/NowPlayingViewLight";
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get("window");
 const DISMISS_THRESHOLD = SCREEN_H * 0.28;

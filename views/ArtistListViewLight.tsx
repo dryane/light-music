@@ -7,7 +7,7 @@ import {
 } from "react-native";
 import { StyledText } from "@/components/StyledText";
 import { ScanProgress } from "@/components/ScanProgress";
-import { ArtistListViewProps } from "@/app/views/ArtistListTypes";
+import { ArtistListViewProps } from "@/views/ArtistListTypes";
 
 export function ArtistListViewLight({
   theme,

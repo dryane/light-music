@@ -8,7 +8,7 @@ import {
 import { StyledText } from "@/components/StyledText";
 import { AlbumArt } from "@/components/AlbumArt";
 import { PlayPauseButton, SkipPrevButton, SkipNextButton } from "@/components/PlayerButtons";
-import { NowPlayingViewProps, fmt } from "@/app/views/NowPlayingTypes";
+import { NowPlayingViewProps, fmt } from "@/views/NowPlayingTypes";
 
 const { width: SCREEN_W } = Dimensions.get("window");
 const ART_SIZE = SCREEN_W - 200;

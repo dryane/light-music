@@ -10,7 +10,7 @@ import { FontAwesome5 } from "@expo/vector-icons";
 import { StyledText } from "@/components/StyledText";
 import { AlbumArt } from "@/components/AlbumArt";
 import { TrackRow } from "@/components/TrackRow";
-import { AlbumScreenViewProps } from "@/app/views/AlbumScreenTypes";
+import { AlbumScreenViewProps } from "@/views/AlbumScreenTypes";
 import { Track } from "@/types/music";
 
 type ListItem =
@@ -18,7 +18,7 @@ type ListItem =
   | { type: "tracksHeader" }
   | { type: "track"; track: Track; index: number };
 
-export function AlbumScreenViewFull({
+export function AlbumScreenViewLight({
   theme,
   insets,
   album,
@@ -61,7 +61,6 @@ export function AlbumScreenViewFull({
     if (item.type === "header") {
       return (
         <View style={[styles.header, { borderBottomColor: border }]}>
-          <AlbumArt uri={album.albumArt} size={52} radius={4} loading={isArtLoading} />
           <View style={styles.headerInfo}>
             <StyledText style={[styles.albumTitle, { color: fg }]} numberOfLines={1}>
               {album.title}

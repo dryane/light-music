@@ -6,8 +6,8 @@ import { usePlayer } from "@/contexts/PlayerContext";
 import { useSwipeBack } from "@/hooks/useSwipeBack";
 import { useTheme } from "@/hooks/useTheme";
 import { Album, Track } from "@/types/music";
-import { ArtistScreenViewFull } from "@/app/views/ArtistScreenViewFull";
-import { ArtistScreenViewLight } from "@/app/views/ArtistScreenViewLight";
+import { ArtistScreenViewFull } from "@/views/ArtistScreenViewFull";
+import { ArtistScreenViewLight } from "@/views/ArtistScreenViewLight";
 
 function isSingle(album: Album): boolean {
   if (album.tracks.length !== 1) return false;

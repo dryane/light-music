@@ -5,9 +5,9 @@ import { useMusic } from "@/contexts/MusicContext";
 import { useTheme } from "@/hooks/useTheme";
 import { useHaptic } from "@/contexts/HapticContext";
 import { Artist } from "@/types/music";
-import { ArtistListSection } from "@/app/views/ArtistListTypes";
-import { ArtistListViewFull } from "@/app/views/ArtistListViewFull";
-import { ArtistListViewLight } from "@/app/views/ArtistListViewLight";
+import { ArtistListSection } from "@/views/ArtistListTypes";
+import { ArtistListViewFull } from "@/views/ArtistListViewFull";
+import { ArtistListViewLight } from "@/views/ArtistListViewLight";
 
 function buildSections(artists: Artist[]): ArtistListSection[] {
   const map = new Map<string, Artist[]>();

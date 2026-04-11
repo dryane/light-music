@@ -5,8 +5,8 @@ import { useMusic } from "@/contexts/MusicContext";
 import { usePlayer } from "@/contexts/PlayerContext";
 import { useSwipeBack } from "@/hooks/useSwipeBack";
 import { useTheme } from "@/hooks/useTheme";
-import { AlbumScreenViewFull } from "@/app/views/AlbumScreenViewFull";
-import { AlbumScreenViewLight } from "@/app/views/AlbumScreenViewLight";
+import { AlbumScreenViewFull } from "@/views/AlbumScreenViewFull";
+import { AlbumScreenViewLight } from "@/views/AlbumScreenViewLight";
 
 export default function AlbumScreen() {
   const { albumId } = useLocalSearchParams<{ albumId: string }>();

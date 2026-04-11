@@ -9,7 +9,7 @@ import {
 import { FontAwesome5 } from "@expo/vector-icons";
 import { StyledText } from "@/components/StyledText";
 import { AlbumArt } from "@/components/AlbumArt";
-import { ArtistScreenViewProps } from "@/app/views/ArtistScreenTypes";
+import { ArtistScreenViewProps } from "@/views/ArtistScreenTypes";
 import { Album, Track } from "@/types/music";
 
 type ListItem =
