@@ -1,8 +1,7 @@
-import React, { createContext, useContext, useEffect } from "react";
+import React, { createContext, useContext, useEffect, useMemo } from "react";
 import { useMediaLibrary } from "@/hooks/useMediaLibrary";
 import { usePlayer } from "@/contexts/PlayerContext";
 import { Track, Album, Artist } from "@/types/music";
-import { useMemo } from "react";
 
 interface MusicContextType {
   tracks: Track[];
@@ -23,36 +22,47 @@ const MusicContext = createContext<MusicContextType | null>(null);
 export function MusicProvider({ children }: { children: React.ReactNode }) {
   const library = useMediaLibrary();
   const { restoreFromLibrary } = usePlayer();
-  console.log("[MUSIC] render", Date.now());
 
-  // Once scan is complete, restore last session
+  // Once the initial scan completes, restore last playback session
   useEffect(() => {
     if (!library.loading && library.tracks.length > 0) {
       restoreFromLibrary(library.tracks);
     }
   }, [library.loading, library.tracks.length]);
 
-const value = useMemo(() => ({
-  ...library,
-}), [
-  library.tracks,
-  library.albums,
-  library.artists,
-  library.loading,
-  library.scanProgress,
-  library.scanStatus,
-  library.error,
-  library.permissionGranted,
-  library.requestPermission,
-  library.refresh,
-  // fetchingArtAlbumIds intentionally excluded — Set reference changes too often
-]);
-
-  return (
-    <MusicContext.Provider value={value}>
-      {children}
-    </MusicContext.Provider>
+  // Stabilise the context value — only re-create when primitive fields change.
+  // fetchingArtAlbumIds is a Set whose reference changes on every art batch
+  // completion, so we include it here deliberately (it drives loading indicators).
+  const value = useMemo<MusicContextType>(
+    () => ({
+      tracks: library.tracks,
+      albums: library.albums,
+      artists: library.artists,
+      loading: library.loading,
+      scanProgress: library.scanProgress,
+      scanStatus: library.scanStatus,
+      error: library.error,
+      permissionGranted: library.permissionGranted,
+      fetchingArtAlbumIds: library.fetchingArtAlbumIds,
+      requestPermission: library.requestPermission,
+      refresh: library.refresh,
+    }),
+    [
+      library.tracks,
+      library.albums,
+      library.artists,
+      library.loading,
+      library.scanProgress,
+      library.scanStatus,
+      library.error,
+      library.permissionGranted,
+      library.fetchingArtAlbumIds,
+      library.requestPermission,
+      library.refresh,
+    ]
   );
+
+  return <MusicContext.Provider value={value}>{children}</MusicContext.Provider>;
 }
 
 export function useMusic() {

@@ -4,12 +4,12 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import ContentContainer from "@/components/ContentContainer";
 import { StyledText } from "@/components/StyledText";
 import { HapticPressable } from "@/components/HapticPressable";
-import { useInvertColors } from "@/contexts/InvertColorsContext";
+import { useTheme } from "@/hooks/useTheme";
 import { n } from "@/utils/scaling";
 
 export default function ConfirmScreen() {
     const router = useRouter();
-    const { invertColors } = useInvertColors();
+    const { fg } = useTheme();
     const params = useLocalSearchParams<{
         title: string;
         message: string;
@@ -25,8 +25,6 @@ export default function ConfirmScreen() {
         });
     };
 
-    const textColor = invertColors ? "black" : "white";
-
     return (
         <ContentContainer headerTitle={params.title || "Confirm"}>
             <StyledText style={styles.messageText}>
@@ -35,7 +33,7 @@ export default function ConfirmScreen() {
 
             <View style={styles.buttonContainer}>
                 <HapticPressable onPress={handleConfirm} style={styles.button}>
-                    <StyledText style={[styles.buttonText, { color: textColor }]}>
+                    <StyledText style={[styles.buttonText, { color: fg }]}>
                         {params.confirmText || "Confirm"}
                     </StyledText>
                 </HapticPressable>

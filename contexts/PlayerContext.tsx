@@ -131,7 +131,7 @@ useEffect(() => {
   if (!currentTrack?.albumArt || !ready) return;
   TrackPlayer.updateNowPlayingMetadata({
     artwork: currentTrack.albumArt,
-  });
+  }).catch(() => {});
 }, [currentTrack?.albumArt, ready]);
 
   // Persist position every 5s while playing — fetch position directly from RNTP

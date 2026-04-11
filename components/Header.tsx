@@ -4,7 +4,7 @@ import { StyleSheet, View } from "react-native";
 import { router } from "expo-router";
 import { StyledText } from "./StyledText";
 import { HapticPressable } from "./HapticPressable";
-import { useInvertColors } from "@/contexts/InvertColorsContext";
+import { useTheme } from "@/hooks/useTheme";
 import { n } from "@/utils/scaling";
 
 interface HeaderProps {
@@ -26,13 +26,10 @@ export function Header({
     rightIcon,
     onRightIconPress,
 }: HeaderProps) {
-    const { invertColors } = useInvertColors();
-    const iconColor = invertColors ? "black" : "white";
+    const { fg, bg } = useTheme();
 
     const handleBack = onBackPress ?? (() => {
-        if (router.canGoBack()) {
-            router.back();
-        }
+        if (router.canGoBack()) router.back();
     });
 
     const renderLeftButton = () => {
@@ -40,11 +37,7 @@ export function Header({
             return (
                 <HapticPressable onPress={handleBack}>
                     <View style={styles.button}>
-                        <MaterialIcons
-                            name="arrow-back-ios"
-                            size={n(28)}
-                            color={iconColor}
-                        />
+                        <MaterialIcons name="arrow-back-ios" size={n(28)} color={fg} />
                     </View>
                 </HapticPressable>
             );
@@ -53,11 +46,7 @@ export function Header({
             return (
                 <HapticPressable onPress={onLeftIconPress}>
                     <View style={styles.button}>
-                        <MaterialIcons
-                            name={leftIcon}
-                            size={n(28)}
-                            color={iconColor}
-                        />
+                        <MaterialIcons name={leftIcon} size={n(28)} color={fg} />
                     </View>
                 </HapticPressable>
             );
@@ -70,11 +59,7 @@ export function Header({
             return (
                 <HapticPressable onPress={onRightIconPress}>
                     <View style={styles.button}>
-                        <MaterialIcons
-                            name={rightIcon}
-                            size={n(28)}
-                            color={iconColor}
-                        />
+                        <MaterialIcons name={rightIcon} size={n(28)} color={fg} />
                     </View>
                 </HapticPressable>
             );
@@ -83,12 +68,7 @@ export function Header({
     };
 
     return (
-        <View
-            style={[
-                styles.header,
-                { backgroundColor: invertColors ? "white" : "black" },
-            ]}
-        >
+        <View style={[styles.header, { backgroundColor: bg }]}>
             {renderLeftButton()}
             <StyledText style={styles.title} numberOfLines={1}>
                 {headerTitle}

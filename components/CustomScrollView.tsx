@@ -8,40 +8,33 @@ import {
     NativeSyntheticEvent,
     NativeScrollEvent,
 } from "react-native";
-import { useInvertColors } from "@/contexts/InvertColorsContext";
+import { useTheme } from "@/hooks/useTheme";
 import { n } from "@/utils/scaling";
 
-interface CustomScrollViewProps<T = any> extends FlatListProps<T> {
-    // We can add any custom props here if needed in the future
-}
+type CustomScrollViewProps<T = any> = FlatListProps<T>;
 
 const CustomScrollView = <T,>({
     style,
     contentContainerStyle,
     ...rest
 }: CustomScrollViewProps<T>) => {
-    const { invertColors } = useInvertColors();
-    const [contentHeight, setContentHeight] = useState<number>(0);
-    const [scrollViewHeight, setScrollViewHeight] = useState<number>(0);
+    const { fg } = useTheme();
+    const [contentHeight, setContentHeight] = useState(0);
+    const [scrollViewHeight, setScrollViewHeight] = useState(0);
     const scrollY = useRef(new Animated.Value(0)).current;
 
     const scrollIndicatorHeight =
-        scrollViewHeight > 0 &&
-            contentHeight > 0 &&
-            contentHeight > scrollViewHeight
-            ? Math.max(
-                (scrollViewHeight * scrollViewHeight) / contentHeight,
-                n(20)
-            )
+        scrollViewHeight > 0 && contentHeight > scrollViewHeight
+            ? Math.max((scrollViewHeight * scrollViewHeight) / contentHeight, n(20))
             : 0;
 
     const scrollIndicatorPosition =
         contentHeight > scrollViewHeight && scrollIndicatorHeight > 0
             ? scrollY.interpolate({
-                inputRange: [0, contentHeight - scrollViewHeight],
-                outputRange: [0, scrollViewHeight - scrollIndicatorHeight],
-                extrapolate: "clamp",
-            })
+                  inputRange: [0, contentHeight - scrollViewHeight],
+                  outputRange: [0, scrollViewHeight - scrollIndicatorHeight],
+                  extrapolate: "clamp",
+              })
             : 0;
 
     const handleScroll = Animated.event(
@@ -49,9 +42,7 @@ const CustomScrollView = <T,>({
         {
             useNativeDriver: false,
             listener: (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-                if (rest.onScroll) {
-                    rest.onScroll(event);
-                }
+                rest.onScroll?.(event);
             },
         }
     );
@@ -65,16 +56,11 @@ const CustomScrollView = <T,>({
                 overScrollMode="never"
                 onContentSizeChange={(width, height) => {
                     setContentHeight(height);
-                    if (rest.onContentSizeChange) {
-                        rest.onContentSizeChange(width, height);
-                    }
+                    rest.onContentSizeChange?.(width, height);
                 }}
                 onLayout={(event) => {
-                    const { height } = event.nativeEvent.layout;
-                    setScrollViewHeight(height);
-                    if (rest.onLayout) {
-                        rest.onLayout(event);
-                    }
+                    setScrollViewHeight(event.nativeEvent.layout.height);
+                    rest.onLayout?.(event);
                 }}
                 onScroll={handleScroll}
                 scrollEventThrottle={16}
@@ -83,27 +69,17 @@ const CustomScrollView = <T,>({
             {scrollIndicatorHeight > 0 && (
                 <View
                     style={[
-                        styles.scrollIndicatorTrack,
-                        { transform: [{ translateX: n(1) }] },
-                        { backgroundColor: invertColors ? "black" : "white" },
+                        styles.scrollTrack,
+                        { transform: [{ translateX: n(1) }], backgroundColor: fg },
                     ]}
                 >
                     <Animated.View
                         style={[
-                            styles.scrollIndicatorThumb,
+                            styles.scrollThumb,
                             {
-                                backgroundColor: invertColors
-                                    ? "black"
-                                    : "white",
-                            },
-                            {
+                                backgroundColor: fg,
                                 height: scrollIndicatorHeight,
-                                transform: [
-                                    {
-                                        translateY:
-                                            scrollIndicatorPosition as any,
-                                    },
-                                ],
+                                transform: [{ translateY: scrollIndicatorPosition as any }],
                             },
                         ]}
                     />
@@ -119,13 +95,13 @@ const styles = StyleSheet.create({
         flexDirection: "row",
         width: "100%",
     },
-    scrollIndicatorTrack: {
+    scrollTrack: {
         width: n(1),
         height: "100%",
         position: "absolute",
         right: n(-2),
     },
-    scrollIndicatorThumb: {
+    scrollThumb: {
         width: n(5),
         position: "absolute",
         right: n(-2),

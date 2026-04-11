@@ -3,7 +3,7 @@ import { MaterialIcons } from "@expo/vector-icons";
 import { StyleSheet, View } from "react-native";
 import { HapticPressable } from "./HapticPressable";
 import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
-import { useInvertColors } from "@/contexts/InvertColorsContext";
+import { useTheme } from "@/hooks/useTheme";
 import { n } from "@/utils/scaling";
 
 export interface TabConfigItem {
@@ -18,20 +18,11 @@ interface NavbarProps {
     navigation: BottomTabBarProps["navigation"];
 }
 
-export function Navbar({
-    tabsConfig,
-    currentScreenName,
-    navigation,
-}: NavbarProps) {
-    const { invertColors } = useInvertColors();
+export function Navbar({ tabsConfig, currentScreenName, navigation }: NavbarProps) {
+    const { fg, fgMuted, bg } = useTheme();
 
     return (
-        <View
-            style={[
-                styles.navbar,
-                { backgroundColor: invertColors ? "white" : "black" },
-            ]}
-        >
+        <View style={[styles.navbar, { backgroundColor: bg }]}>
             {tabsConfig?.map((tab) => (
                 <HapticPressable
                     key={tab.screenName}
@@ -40,15 +31,7 @@ export function Navbar({
                     <MaterialIcons
                         name={tab.iconName}
                         size={n(48)}
-                        color={
-                            tab.screenName === currentScreenName
-                                ? invertColors
-                                    ? "black"
-                                    : "white"
-                                : invertColors
-                                    ? "#C1C1C1"
-                                    : "#6E6E6E"
-                        }
+                        color={tab.screenName === currentScreenName ? fg : fgMuted}
                     />
                 </HapticPressable>
             ))}

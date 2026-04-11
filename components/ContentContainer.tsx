@@ -1,7 +1,7 @@
 import React, { ReactNode } from "react";
 import { View, StyleSheet, StyleProp, ViewStyle } from "react-native";
 import { Header } from "@/components/Header";
-import { useInvertColors } from "@/contexts/InvertColorsContext";
+import { useTheme } from "@/hooks/useTheme";
 import { MaterialIcons } from "@expo/vector-icons";
 import { n } from "@/utils/scaling";
 
@@ -24,14 +24,10 @@ export default function ContentContainer({
     onRightIconPress,
     style,
 }: ContentContainerProps) {
-    const { invertColors } = useInvertColors();
+    const { bg } = useTheme();
+
     return (
-        <View
-            style={[
-                styles.container,
-                { backgroundColor: invertColors ? "white" : "black" },
-            ]}
-        >
+        <View style={[styles.container, { backgroundColor: bg }]}>
             {headerTitle && (
                 <Header
                     headerTitle={headerTitle}

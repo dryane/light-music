@@ -17,8 +17,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyledText } from "@/components/StyledText";
 import { AlbumArt } from "@/components/AlbumArt";
 import { PlayPauseButton, SkipPrevButton, SkipNextButton } from "@/components/PlayerButtons";
-import { useInvertColors } from "@/contexts/InvertColorsContext";
 import { usePlayer } from "@/contexts/PlayerContext";
+import { useTheme } from "@/hooks/useTheme";
 import { setGlobalDismissing } from "@/hooks/useSwipeBack";
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get("window");
@@ -34,7 +34,7 @@ function fmt(secs: number) {
 
 export default function NowPlayingScreen() {
   const { togglePlayPause, skipNext, skipPrev } = usePlayer();
-  const { invertColors } = useInvertColors();
+  const { fg, fgDim, bg, trackBg } = useTheme();
   const insets = useSafeAreaInsets();
 
   const activeTrack = useActiveTrack();
@@ -43,12 +43,7 @@ export default function NowPlayingScreen() {
   const isPlaying = playbackState.state === State.Playing;
   const { position, duration } = progress;
 
-  const fg = invertColors ? "#000000" : "#ffffff";
-  const fgMuted = invertColors ? "#888888" : "#484848";
-  const bg = invertColors ? "#ffffff" : "#000000";
-  const trackBg = invertColors ? "#e0e0e0" : "#1e1e1e";
-
-  // ─── Seek bar ─────────────────────────────────────────────────────────────
+  // ─── Seek bar ──────────────────────────────────────────────────────────────
   const seekAnim = useRef(new Animated.Value(0)).current;
   const isDragging = useRef(false);
   const wasPlaying = useRef(false);
@@ -69,8 +64,7 @@ export default function NowPlayingScreen() {
   }, [activeTrack?.id]);
 
   useEffect(() => {
-    if (isDragging.current) return;
-    if (duration <= 0) return;
+    if (isDragging.current || duration <= 0) return;
     const ratio = Math.min(1, position / duration);
     Animated.timing(seekAnim, {
       toValue: ratio,
@@ -140,31 +134,34 @@ export default function NowPlayingScreen() {
     })
   ).current;
 
-  // ─── Refs for closures ────────────────────────────────────────────────────
+  // ─── Keep skip callbacks up to date in PanResponder closures ──────────────
   const skipNextRef = useRef(skipNext);
   const skipPrevRef = useRef(skipPrev);
   useEffect(() => { skipNextRef.current = skipNext; }, [skipNext]);
   useEffect(() => { skipPrevRef.current = skipPrev; }, [skipPrev]);
 
-  // ─── Art swipe ────────────────────────────────────────────────────────────
+  // ─── Album art swipe (left = next, right = prev) ───────────────────────────
   const artX = useRef(new Animated.Value(0)).current;
   const artOpacity = useRef(new Animated.Value(1)).current;
 
-  const animateSkip = useCallback((direction: "left" | "right", onComplete: () => void) => {
-    const toValue = direction === "left" ? -SCREEN_W : SCREEN_W;
-    Animated.parallel([
-      Animated.timing(artX, { toValue, duration: 180, useNativeDriver: true }),
-      Animated.timing(artOpacity, { toValue: 0, duration: 180, useNativeDriver: true }),
-    ]).start(() => {
-      onComplete();
-      artX.setValue(direction === "left" ? SCREEN_W : -SCREEN_W);
-      artOpacity.setValue(0);
+  const animateSkip = useCallback(
+    (direction: "left" | "right", onComplete: () => void) => {
+      const toValue = direction === "left" ? -SCREEN_W : SCREEN_W;
       Animated.parallel([
-        Animated.spring(artX, { toValue: 0, useNativeDriver: true, tension: 100, friction: 12 }),
-        Animated.timing(artOpacity, { toValue: 1, duration: 150, useNativeDriver: true }),
-      ]).start();
-    });
-  }, [artX, artOpacity]);
+        Animated.timing(artX, { toValue, duration: 180, useNativeDriver: true }),
+        Animated.timing(artOpacity, { toValue: 0, duration: 180, useNativeDriver: true }),
+      ]).start(() => {
+        onComplete();
+        artX.setValue(direction === "left" ? SCREEN_W : -SCREEN_W);
+        artOpacity.setValue(0);
+        Animated.parallel([
+          Animated.spring(artX, { toValue: 0, useNativeDriver: true, tension: 100, friction: 12 }),
+          Animated.timing(artOpacity, { toValue: 1, duration: 150, useNativeDriver: true }),
+        ]).start();
+      });
+    },
+    [artX, artOpacity]
+  );
 
   const artPan = useRef(
     PanResponder.create({
@@ -190,7 +187,7 @@ export default function NowPlayingScreen() {
     })
   ).current;
 
-  // ─── Screen dismiss swipe down ────────────────────────────────────────────
+  // ─── Screen dismiss swipe down ─────────────────────────────────────────────
   const screenY = useRef(new Animated.Value(0)).current;
   const screenOpacity = screenY.interpolate({
     inputRange: [0, SCREEN_H * 0.5],
@@ -202,7 +199,6 @@ export default function NowPlayingScreen() {
     outputRange: [1, 0.95],
     extrapolate: "clamp",
   });
-
   const dismissingRef = useRef(false);
 
   const screenPan = useRef(
@@ -213,24 +209,23 @@ export default function NowPlayingScreen() {
       onPanResponderMove: (_, g) => {
         if (!dismissingRef.current && g.dy > 0) screenY.setValue(g.dy);
       },
-onPanResponderRelease: (_, g) => {
-  if (dismissingRef.current) return;
-  if (g.dy > DISMISS_THRESHOLD || g.vy > DISMISS_VELOCITY) {
-    dismissingRef.current = true;
-    setGlobalDismissing(true);
-    router.back();
-    setTimeout(() => { setGlobalDismissing(false); }, 1000);
-  } else {
-    Animated.spring(screenY, {
-      toValue: 0,
-      useNativeDriver: true,
-      tension: 120,
-      friction: 14,
-    }).start();
-  }
-},
+      onPanResponderRelease: (_, g) => {
+        if (dismissingRef.current) return;
+        if (g.dy > DISMISS_THRESHOLD || g.vy > DISMISS_VELOCITY) {
+          dismissingRef.current = true;
+          setGlobalDismissing(true);
+          router.back();
+          setTimeout(() => setGlobalDismissing(false), 1000);
+        } else {
+          Animated.spring(screenY, {
+            toValue: 0,
+            useNativeDriver: true,
+            tension: 120,
+            friction: 14,
+          }).start();
+        }
+      },
       onPanResponderTerminate: () => {
-        // If dismissing, don't interfere with the animation
         if (dismissingRef.current) return;
         Animated.spring(screenY, {
           toValue: 0,
@@ -246,7 +241,7 @@ onPanResponderRelease: (_, g) => {
     return (
       <View style={[styles.root, { backgroundColor: bg, paddingTop: insets.top }]}>
         <View style={styles.centered}>
-          <StyledText style={{ color: fgMuted }}>Nothing is playing.</StyledText>
+          <StyledText style={{ color: fgDim }}>Nothing is playing.</StyledText>
         </View>
       </View>
     );
@@ -260,14 +255,13 @@ onPanResponderRelease: (_, g) => {
           backgroundColor: bg,
           paddingTop: insets.top + 12,
           paddingBottom: insets.bottom + 16,
-      transform: [{ translateY: screenY }],
-
+          transform: [{ translateY: screenY }],
         },
       ]}
       {...screenPan.panHandlers}
     >
       <View style={styles.handleWrap}>
-        <View style={[styles.handle, { backgroundColor: fgMuted }]} />
+        <View style={[styles.handle, { backgroundColor: fgDim }]} />
       </View>
 
       <Animated.View
@@ -281,7 +275,7 @@ onPanResponderRelease: (_, g) => {
         <StyledText style={[styles.trackTitle, { color: fg }]} numberOfLines={2}>
           {activeTrack.title}
         </StyledText>
-        <StyledText style={[styles.trackSub, { color: fgMuted }]} numberOfLines={1}>
+        <StyledText style={[styles.trackSub, { color: fgDim }]} numberOfLines={1}>
           {activeTrack.artist}
           {activeTrack.album && activeTrack.album !== "Unknown Album"
             ? ` · ${activeTrack.album}`
@@ -318,8 +312,8 @@ onPanResponderRelease: (_, g) => {
         </View>
 
         <View style={styles.timeRow}>
-          <StyledText style={[styles.time, { color: fgMuted }]}>{fmt(labelSecs)}</StyledText>
-          <StyledText style={[styles.time, { color: fgMuted }]}>{fmt(duration)}</StyledText>
+          <StyledText style={[styles.time, { color: fgDim }]}>{fmt(labelSecs)}</StyledText>
+          <StyledText style={[styles.time, { color: fgDim }]}>{fmt(duration)}</StyledText>
         </View>
       </View>
 
@@ -343,24 +337,13 @@ const styles = StyleSheet.create({
   handleWrap: { alignItems: "center", marginBottom: -8 },
   handle: { width: 36, height: 4, borderRadius: 2, opacity: 0.3 },
   artWrap: { alignSelf: "center" },
-  trackInfo: { gap: 4, marginBottom:-15 },
+  trackInfo: { gap: 4, marginBottom: -15 },
   trackTitle: { fontSize: 14, fontWeight: "700", lineHeight: 24, marginBottom: -6 },
   trackSub: { fontSize: 10 },
   progressSection: { gap: 8, marginBottom: -30 },
-  seekHitArea: {
-    height: 36,
-    justifyContent: "center",
-    position: "relative",
-  },
-  progressTrack: {
-    height: 3,
-    borderRadius: 2,
-    overflow: "hidden",
-  },
-  progressFill: {
-    height: "100%",
-    borderRadius: 2,
-  },
+  seekHitArea: { height: 36, justifyContent: "center", position: "relative" },
+  progressTrack: { height: 3, borderRadius: 2, overflow: "hidden" },
+  progressFill: { height: "100%", borderRadius: 2 },
   thumb: {
     position: "absolute",
     width: 16,
@@ -369,11 +352,7 @@ const styles = StyleSheet.create({
     top: 10,
     marginLeft: -8,
   },
-  timeRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginTop: -5,
-  },
+  timeRow: { flexDirection: "row", justifyContent: "space-between", marginTop: -5 },
   time: { fontSize: 10 },
   controls: {
     flexDirection: "row",

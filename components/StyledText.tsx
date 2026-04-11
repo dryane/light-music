@@ -1,6 +1,7 @@
 import React from "react";
 import { Text as DefaultText, TextProps, StyleSheet } from "react-native";
 import { useInvertColors } from "@/contexts/InvertColorsContext";
+import { useTheme } from "@/hooks/useTheme";
 
 const FONT_SCALE = 1.375; // change this to adjust all text globally
 
@@ -10,6 +11,7 @@ interface StyledTextProps extends TextProps {
 
 export function StyledText({ style, ...rest }: StyledTextProps) {
     const { invertColors } = useInvertColors();
+    const { font } = useTheme();
 
     const scaleStyle = (s: any) => {
         if (!s || typeof s !== "object" || !s.fontSize) return s;
@@ -24,7 +26,7 @@ export function StyledText({ style, ...rest }: StyledTextProps) {
         <DefaultText
             allowFontScaling={false}
             style={[
-                styles.text,
+                { fontFamily: font },
                 { color: invertColors ? "black" : "white" },
                 scaledStyle,
             ]}
@@ -32,9 +34,3 @@ export function StyledText({ style, ...rest }: StyledTextProps) {
         />
     );
 }
-
-const styles = StyleSheet.create({
-    text: {
-        fontFamily: "PublicSans-Regular",
-    },
-});

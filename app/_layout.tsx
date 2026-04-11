@@ -1,20 +1,23 @@
-import { Stack, useSegments, router } from "expo-router";
+import { Stack, useSegments } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useRef } from "react";
 import * as SplashScreen from "expo-splash-screen";
 import { useFonts } from "expo-font";
 import { View, StyleSheet, AppState } from "react-native";
-import TrackPlayer from "react-native-track-player";
-import { useActiveTrack, usePlaybackState, State } from "react-native-track-player";
-import { InvertColorsProvider, useInvertColors } from "@/contexts/InvertColorsContext";
+import TrackPlayer, { State } from "react-native-track-player";
+import { usePlaybackState } from "react-native-track-player";
+import { InvertColorsProvider } from "@/contexts/InvertColorsContext";
 import { HapticProvider } from "@/contexts/HapticContext";
 import { PlayerProvider } from "@/contexts/PlayerContext";
 import { MusicProvider } from "@/contexts/MusicContext";
+import { ThemeVariantProvider } from "@/contexts/ThemeVariantContext";
 import { MiniPlayer } from "@/components/MiniPlayer";
+import { useTheme } from "@/hooks/useTheme";
+import { pushNowPlayingInstant } from "@/hooks/useNowPlayingNav"; // Bug fix: was missing
 
 SplashScreen.preventAutoHideAsync();
 
-// Register RNTP background service once at startup
+// Register RNTP background service exactly once at startup.
 let serviceRegistered = false;
 if (!serviceRegistered) {
   serviceRegistered = true;
@@ -22,36 +25,36 @@ if (!serviceRegistered) {
 }
 
 function AppShell() {
-  const { invertColors } = useInvertColors();
-  const bg = invertColors ? "#ffffff" : "#000000";
-  const activeTrack = useActiveTrack();
+  const { bg } = useTheme();
   const playbackState = usePlaybackState();
-  const isPlaying = playbackState.state === State.Playing;
+  const segments = useSegments();
   const appState = useRef(AppState.currentState);
 
-const segments = useSegments();
-
-useEffect(() => {
-  const sub = AppState.addEventListener("change", (nextState) => {
-    if (
-      appState.current.match(/inactive|background/) &&
-      nextState === "active"
-    ) {
-        TrackPlayer.getPlaybackState().then((state) => {
-          if (
-            state.state === State.Playing &&
-            !segments.includes("nowplaying" as never)
-          ) {
-            pushNowPlayingInstant();
-          }
-        }).catch(() => {
-          // Player not yet initialized, ignore
-        });
-    }
-    appState.current = nextState;
-  });
-  return () => sub.remove();
-}, [segments]);
+  // When the app returns to foreground while a track is playing,
+  // immediately navigate to the now-playing screen (skip slide animation).
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (nextState) => {
+      if (
+        appState.current.match(/inactive|background/) &&
+        nextState === "active"
+      ) {
+        TrackPlayer.getPlaybackState()
+          .then((state) => {
+            if (
+              state.state === State.Playing &&
+              !segments.includes("nowplaying" as never)
+            ) {
+              pushNowPlayingInstant();
+            }
+          })
+          .catch(() => {
+            // Player not yet initialised — ignore
+          });
+      }
+      appState.current = nextState;
+    });
+    return () => sub.remove();
+  }, [segments]);
 
   return (
     <View style={[styles.root, { backgroundColor: bg }]}>
@@ -96,23 +99,28 @@ useEffect(() => {
 }
 
 export default function RootLayout() {
-  const [loaded] = useFonts({});
+  const [loaded] = useFonts({
+      "PublicSans": require("../assets/fonts/PublicSans-Regular.ttf"),
+      "ComicSans": require("../assets/fonts/Comic-Sans.ttf")
+  });
 
   useEffect(() => {
     if (loaded) SplashScreen.hideAsync();
   }, [loaded]);
 
   return (
-    <InvertColorsProvider>
-      <HapticProvider>
-        <PlayerProvider>
-          <MusicProvider>
-            <StatusBar translucent style="auto" />
-            {loaded && <AppShell />}
-          </MusicProvider>
-        </PlayerProvider>
-      </HapticProvider>
-    </InvertColorsProvider>
+    <ThemeVariantProvider>
+      <InvertColorsProvider>
+        <HapticProvider>
+          <PlayerProvider>
+            <MusicProvider>
+              <StatusBar translucent style="auto" />
+              {loaded && <AppShell />}
+            </MusicProvider>
+          </PlayerProvider>
+        </HapticProvider>
+      </InvertColorsProvider>
+    </ThemeVariantProvider>
   );
 }
 

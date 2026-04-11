@@ -1,37 +1,63 @@
 import React from "react";
-import { View, Image, StyleSheet } from "react-native";
-import { useInvertColors } from "@/contexts/InvertColorsContext";
+import { View, Image, ActivityIndicator, StyleSheet } from "react-native";
+import { useTheme } from "@/hooks/useTheme";
 
 interface AlbumArtProps {
   uri: string | null;
   size: number;
   radius?: number;
+  /** When true, renders a loading indicator over the placeholder. */
+  loading?: boolean;
 }
 
-export function AlbumArt({ uri, size, radius = 0 }: AlbumArtProps) {
-  const { invertColors } = useInvertColors();
-  const placeholderBg = invertColors ? "#e8e8e8" : "#141414";
+export function AlbumArt({ uri, size, radius = 0, loading = false }: AlbumArtProps) {
+  const { placeholderBg, fgMuted } = useTheme();
 
   if (uri) {
     return (
-      <Image
-        source={{ uri }}
-        style={{ width: size, height: size, borderRadius: radius, backgroundColor: placeholderBg }}
-        resizeMode="cover"
-      />
+      <View style={{ width: size, height: size }}>
+        <Image
+          source={{ uri }}
+          style={{ width: size, height: size, borderRadius: radius, backgroundColor: placeholderBg }}
+          resizeMode="cover"
+        />
+        {loading && (
+          <View style={[StyleSheet.absoluteFill, styles.loadingOverlay]}>
+            <ActivityIndicator size="small" color={fgMuted} />
+          </View>
+        )}
+      </View>
     );
   }
 
+  if (loading) {
+    return (
+      <View
+        style={[
+          styles.placeholder,
+          { width: size, height: size, borderRadius: radius, backgroundColor: placeholderBg },
+        ]}
+      >
+        <ActivityIndicator size="small" color={fgMuted} />
+      </View>
+    );
+  }
+
+  // No art and not loading — collapse to zero width (existing behaviour)
   return (
-    <View
-      style={[
-        styles.placeholder,
-        { height: size, width: 0, marginRight:-12 },
-      ]}
-    />
+    <View style={{ height: size, width: 0, marginRight: -12 }} />
   );
 }
 
 const styles = StyleSheet.create({
-  placeholder: {},
+  placeholder: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  loadingOverlay: {
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0,0,0,0.3)",
+    borderRadius: 4,
+  },
 });

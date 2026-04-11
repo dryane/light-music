@@ -1,11 +1,9 @@
 import { Tabs } from "expo-router";
 import { View, StyleSheet } from "react-native";
-import { useInvertColors } from "@/contexts/InvertColorsContext";
-import { MiniPlayer } from "@/components/MiniPlayer";
+import { useTheme } from "@/hooks/useTheme";
 
 export default function TabsLayout() {
-  const { invertColors } = useInvertColors();
-  const bg = invertColors ? "#ffffff" : "#000000";
+  const { bg } = useTheme();
 
   return (
     <View style={[styles.root, { backgroundColor: bg }]}>

@@ -2,7 +2,7 @@ import React from "react";
 import { View, TextInput, StyleSheet } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 import { HapticPressable } from "@/components/HapticPressable";
-import { useInvertColors } from "@/contexts/InvertColorsContext";
+import { useTheme } from "@/hooks/useTheme";
 import { useHaptic } from "@/contexts/HapticContext";
 import { n } from "@/utils/scaling";
 
@@ -21,11 +21,8 @@ export function SearchInput({
     onSubmit,
     autoFocus = false,
 }: SearchInputProps) {
-    const { invertColors } = useInvertColors();
+    const { fg } = useTheme();
     const { triggerHaptic } = useHaptic();
-
-    const textColor = invertColors ? "black" : "white";
-    const borderColor = invertColors ? "black" : "white";
 
     const handleClear = () => {
         triggerHaptic();
@@ -33,15 +30,15 @@ export function SearchInput({
     };
 
     return (
-        <View style={[styles.container, { borderBottomColor: borderColor }]}>
+        <View style={[styles.container, { borderBottomColor: fg }]}>
             <TextInput
-                style={[styles.input, { color: textColor }]}
+                style={[styles.input, { color: fg }]}
                 value={value}
                 onChangeText={onChangeText}
                 placeholder={placeholder}
-                placeholderTextColor={textColor}
-                cursorColor={textColor}
-                selectionColor={textColor}
+                placeholderTextColor={fg}
+                cursorColor={fg}
+                selectionColor={fg}
                 allowFontScaling={false}
                 autoCapitalize="none"
                 autoCorrect={false}
@@ -51,7 +48,7 @@ export function SearchInput({
             />
             {value.length > 0 && (
                 <HapticPressable onPress={handleClear} style={styles.clearButton}>
-                    <MaterialIcons name="close" size={n(24)} color={textColor} />
+                    <MaterialIcons name="close" size={n(24)} color={fg} />
                 </HapticPressable>
             )}
         </View>

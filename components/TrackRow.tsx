@@ -1,71 +1,39 @@
 import React from "react";
 import { View, StyleSheet, TouchableOpacity } from "react-native";
 import { FontAwesome5 } from "@expo/vector-icons";
-import * as Haptics from "expo-haptics";
 import { StyledText } from "@/components/StyledText";
-import { useInvertColors } from "@/contexts/InvertColorsContext";
 import { usePlayer } from "@/contexts/PlayerContext";
+import { useTheme } from "@/hooks/useTheme";
+import { useHaptic } from "@/contexts/HapticContext";
 import { Track } from "@/types/music";
+import { TrackRowFull } from "@/components/track-row/TrackRowFull";
+import { TrackRowLight } from "@/components/track-row/TrackRowLight";
 
 interface TrackRowProps {
   track: Track;
   queue: Track[];
-  trackNumber?: number;
-}
-
-export function formatDuration(ms: number): string {
-  const s = Math.floor(ms / 1000);
-  return `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`;
+  trackNumber?: number | null;
 }
 
 export function TrackRow({ track, queue, trackNumber }: TrackRowProps) {
-  const { invertColors } = useInvertColors();
+  const { fg, fgMuted, border } = useTheme();
   const { playTrack, currentTrack, isPlaying } = usePlayer();
+  const { triggerHaptic } = useHaptic();
   const isActive = currentTrack?.id === track.id;
+  const theme = useTheme();
 
-  const fg = invertColors ? "#000000" : "#ffffff";
-  const fgMuted = invertColors ? "#888888" : "#3a3a3a";
-  const activeFg = invertColors ? "#000000" : "#ffffff";
-  const border = invertColors ? "#e8e8e8" : "#0e0e0e";
-  console.log("[TRACKROW] render", track.id, Date.now());
+  const props = {
+    track,
+    trackNumber,
+    isActive,
+    isPlaying,
+    theme,
+    onPress: () => { triggerHaptic(); playTrack(track, queue); },
+  };
 
-  return (
-    <TouchableOpacity
-      onPress={() => {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        playTrack(track, queue);
-      }}
-      activeOpacity={0.5}
-      style={[styles.row, { borderBottomColor: border }]}
-    >
-      <View style={styles.numWrap}>
-        {isActive ? (
-          <FontAwesome5
-            name={isPlaying ? "pause" : "play"}
-            size={9}
-            color={activeFg}
-            solid
-            style={isPlaying ? undefined : styles.playOffset}
-          />
-        ) : trackNumber != null ? (
-          <StyledText style={[styles.num, { color: fgMuted }]}>{trackNumber}</StyledText>
-        ) : null}
-      </View>
-
-      <View style={styles.info}>
-        <StyledText
-          style={[styles.title, { color: isActive ? activeFg : fg }]}
-          numberOfLines={1}
-        >
-          {track.title}
-        </StyledText>
-      </View>
-
-      <StyledText style={[styles.duration, { color: fgMuted }]}>
-        {formatDuration(track.duration)}
-      </StyledText>
-    </TouchableOpacity>
-  );
+  return theme.variant === "light"
+    ? <TrackRowLight {...props} />
+    : <TrackRowFull {...props} />;
 }
 
 const styles = StyleSheet.create({

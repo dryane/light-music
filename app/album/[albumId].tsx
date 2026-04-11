@@ -12,34 +12,30 @@ import { FontAwesome5 } from "@expo/vector-icons";
 import { StyledText } from "@/components/StyledText";
 import { AlbumArt } from "@/components/AlbumArt";
 import { TrackRow } from "@/components/TrackRow";
-import { useInvertColors } from "@/contexts/InvertColorsContext";
 import { useMusic } from "@/contexts/MusicContext";
 import { usePlayer } from "@/contexts/PlayerContext";
 import { useSwipeBack } from "@/hooks/useSwipeBack";
+import { useTheme } from "@/hooks/useTheme";
 import { Track } from "@/types/music";
 
 export default function AlbumScreen() {
   const { albumId } = useLocalSearchParams<{ albumId: string }>();
   const { albums, fetchingArtAlbumIds = new Set() } = useMusic();
   const { playTrack } = usePlayer();
-  const { invertColors } = useInvertColors();
+  const { fg, fgMuted, bg, border, sectionBg } = useTheme();
   const insets = useSafeAreaInsets();
   const { panHandlers, translateX } = useSwipeBack();
 
-  const fg = invertColors ? "#000000" : "#ffffff";
-  const fgMuted = invertColors ? "#888888" : "#777";
-  const bg = invertColors ? "#ffffff" : "#000000";
-  const border = invertColors ? "#e8e8e8" : "#111111";
-  const sectionBg = invertColors ? "#f0f0f0" : "#080808";
-
   const album = albums.find((a) => a.id === albumId);
   const isArtLoading = album ? fetchingArtAlbumIds.has(album.id) : false;
-  console.log("[ALBUM] render", albumId, Date.now());
 
   if (!album) {
     return (
       <Animated.View
-        style={[styles.root, { backgroundColor: bg, paddingTop: insets.top, transform: [{ translateX }] }]}
+        style={[
+          styles.root,
+          { backgroundColor: bg, paddingTop: insets.top, transform: [{ translateX }] },
+        ]}
         {...panHandlers}
       >
         <View style={styles.centered}>
@@ -68,7 +64,7 @@ export default function AlbumScreen() {
   ];
 
   const stickyIndices = listData
-    .map((item, i) => item.type === "tracksHeader" ? i : null)
+    .map((item, i) => (item.type === "tracksHeader" ? i : null))
     .filter((i): i is number => i !== null);
 
   const renderItem = ({ item }: { item: ListItem }) => {
@@ -98,8 +94,15 @@ export default function AlbumScreen() {
 
     if (item.type === "tracksHeader") {
       return (
-        <View style={[styles.sectionLabel, { backgroundColor: sectionBg, borderBottomColor: border }]}>
-          <StyledText style={[styles.sectionLabelText, { color: fgMuted }]}>TRACKS</StyledText>
+        <View
+          style={[
+            styles.sectionLabel,
+            { backgroundColor: sectionBg, borderBottomColor: border },
+          ]}
+        >
+          <StyledText style={[styles.sectionLabelText, { color: fgMuted }]}>
+            TRACKS
+          </StyledText>
         </View>
       );
     }
@@ -119,7 +122,10 @@ export default function AlbumScreen() {
 
   return (
     <Animated.View
-      style={[styles.root, { backgroundColor: bg, paddingTop: insets.top, transform: [{ translateX }] }]}
+      style={[
+        styles.root,
+        { backgroundColor: bg, paddingTop: insets.top, transform: [{ translateX }] },
+      ]}
       {...panHandlers}
     >
       <FlatList
@@ -131,7 +137,10 @@ export default function AlbumScreen() {
         stickyHeaderIndices={stickyIndices}
         renderItem={renderItem}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 16 }]}
+        contentContainerStyle={[
+          styles.listContent,
+          { paddingBottom: insets.bottom + 16 },
+        ]}
       />
     </Animated.View>
   );

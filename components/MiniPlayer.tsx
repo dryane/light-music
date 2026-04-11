@@ -1,27 +1,32 @@
 import React, { useEffect, useRef } from "react";
 import { View, StyleSheet, TouchableOpacity, Pressable, Animated } from "react-native";
 import { router, useSegments } from "expo-router";
-import { useActiveTrack, usePlaybackState, useProgress, State } from "react-native-track-player";
+import {
+  useActiveTrack,
+  usePlaybackState,
+  useProgress,
+  State,
+} from "react-native-track-player";
 import TrackPlayer from "react-native-track-player";
 import { FontAwesome5 } from "@expo/vector-icons";
-import * as Haptics from "expo-haptics";
 import { StyledText } from "@/components/StyledText";
 import { AlbumArt } from "@/components/AlbumArt";
-import { useInvertColors } from "@/contexts/InvertColorsContext";
-import { useMusic } from "@/contexts/MusicContext";
+import { useTheme } from "@/hooks/useTheme";
+import { useHaptic } from "@/contexts/HapticContext";
 
 export function MiniPlayer() {
   const activeTrack = useActiveTrack();
   const playbackState = usePlaybackState();
   const progress = useProgress(1000);
-  const { artists } = useMusic();
-  const { invertColors } = useInvertColors();
+  const { fg, fgMuted, bg, border, progressBg } = useTheme();
+  const { triggerHaptic } = useHaptic();
   const segments = useSegments();
 
   const isPlaying = playbackState.state === State.Playing;
-  const progressRatio = progress.duration > 0 ? progress.position / progress.duration : 0;
+  const progressRatio =
+    progress.duration > 0 ? progress.position / progress.duration : 0;
 
-  // Slide-up animation on first appear
+  // Slide-up animation on first appearance
   const slideAnim = useRef(new Animated.Value(60)).current;
   const hasAnimated = useRef(false);
 
@@ -43,13 +48,6 @@ export function MiniPlayer() {
 
   if (!activeTrack || segments.includes("nowplaying" as never)) return null;
 
-  const fg = invertColors ? "#000000" : "#ffffff";
-  const fgMuted = invertColors ? "#888888" : "#484848";
-  const bg = invertColors ? "#ffffff" : "#000000";
-  const border = invertColors ? "#e0e0e0" : "#1a1a1a";
-  const progressColor = invertColors ? "#000000" : "#ffffff";
-  const progressBg = invertColors ? "#e0e0e0" : "#2a2a2a";
-
   return (
     <Animated.View style={{ transform: [{ translateY: slideAnim }] }}>
       {/* Thin progress bar along top edge */}
@@ -57,7 +55,7 @@ export function MiniPlayer() {
         <View
           style={[
             styles.progressFill,
-            { backgroundColor: progressColor, width: `${progressRatio * 100}%` },
+            { backgroundColor: fg, width: `${progressRatio * 100}%` },
           ]}
         />
       </View>
@@ -66,15 +64,12 @@ export function MiniPlayer() {
         <TouchableOpacity
           onPress={() => router.push("/nowplaying")}
           activeOpacity={1}
-            style={!activeTrack.artwork ? { marginRight: -11 } : undefined}
+          style={!activeTrack.artwork ? { marginRight: -11 } : undefined}
         >
           <AlbumArt uri={activeTrack.artwork ?? null} size={34} radius={4} />
         </TouchableOpacity>
 
-        <Pressable
-          style={styles.info}
-          onPress={() => router.push("/nowplaying")}
-        >
+        <Pressable style={styles.info} onPress={() => router.push("/nowplaying")}>
           <StyledText style={[styles.title, { color: fg }]} numberOfLines={1}>
             {activeTrack.title}
           </StyledText>
@@ -84,9 +79,7 @@ export function MiniPlayer() {
         </Pressable>
 
         <TouchableOpacity
-          onPress={async () => {
-            await TrackPlayer.reset();
-          }}
+          onPress={() => TrackPlayer.reset()}
           hitSlop={12}
           style={styles.btn}
         >
@@ -95,7 +88,7 @@ export function MiniPlayer() {
 
         <TouchableOpacity
           onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            triggerHaptic();
             isPlaying ? TrackPlayer.pause() : TrackPlayer.play();
           }}
           hitSlop={12}
@@ -112,7 +105,7 @@ export function MiniPlayer() {
 
         <TouchableOpacity
           onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            triggerHaptic();
             TrackPlayer.skipToNext();
           }}
           hitSlop={12}
@@ -126,18 +119,13 @@ export function MiniPlayer() {
 }
 
 const styles = StyleSheet.create({
-  progressBar: {
-    height: 1.5,
-    width: "100%",
-  },
-  progressFill: {
-    height: "100%",
-  },
+  progressBar: { height: 1.5, width: "100%" },
+  progressFill: { height: "100%" },
   container: {
     flexDirection: "row",
     alignItems: "center",
     paddingRight: 14,
-    paddingLeft:18,
+    paddingLeft: 18,
     paddingVertical: 9,
     borderTopWidth: StyleSheet.hairlineWidth,
     gap: 11,

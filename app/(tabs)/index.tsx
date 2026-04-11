@@ -7,11 +7,11 @@ import {
 } from "react-native";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import * as Haptics from "expo-haptics";
 import { StyledText } from "@/components/StyledText";
 import { ScanProgress } from "@/components/ScanProgress";
-import { useInvertColors } from "@/contexts/InvertColorsContext";
 import { useMusic } from "@/contexts/MusicContext";
+import { useTheme } from "@/hooks/useTheme";
+import { useHaptic } from "@/contexts/HapticContext";
 import { Artist } from "@/types/music";
 
 function buildSections(artists: Artist[]) {
@@ -34,21 +34,23 @@ function buildSections(artists: Artist[]) {
 }
 
 export default function ArtistListScreen() {
-  const { invertColors } = useInvertColors();
-  const { artists, loading, scanProgress, scanStatus, error, permissionGranted, requestPermission } = useMusic();
+  const { fg, fgMuted, bg, sectionBg, border } = useTheme();
+  const {
+    artists,
+    loading,
+    scanProgress,
+    scanStatus,
+    error,
+    permissionGranted,
+    requestPermission,
+  } = useMusic();
+  const { triggerHaptic } = useHaptic();
   const insets = useSafeAreaInsets();
 
-  const fg = invertColors ? "#000000" : "#ffffff";
-  const fgMuted = invertColors ? "#888888" : "#777";
-  const bg = invertColors ? "#ffffff" : "#000000";
-  const sectionBg = invertColors ? "#f0f0f0" : "#080808";
-  const border = invertColors ? "#e8e8e8" : "#111111";
-
   const sections = useMemo(() => buildSections(artists), [artists]);
-  console.log("[INDEX] render", Date.now());
 
   const navigateToArtist = (artist: Artist) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    triggerHaptic();
     if (artist.albums.length === 1) {
       router.push({
         pathname: "/album/[albumId]",
@@ -81,15 +83,15 @@ export default function ArtistListScreen() {
     );
   }
 
-    if (loading && scanProgress < 1) {
-      return (
-        <View style={[styles.root, { backgroundColor: bg, paddingTop: insets.top }]}>
-          <View style={StyleSheet.absoluteFill}>
-            <ScanProgress progress={scanProgress} status={scanStatus} />
-          </View>
+  if (loading && scanProgress < 1) {
+    return (
+      <View style={[styles.root, { backgroundColor: bg, paddingTop: insets.top }]}>
+        <View style={StyleSheet.absoluteFill}>
+          <ScanProgress progress={scanProgress} status={scanStatus} />
         </View>
-      );
-    }
+      </View>
+    );
+  }
 
   if (error) {
     return (
@@ -110,7 +112,12 @@ export default function ArtistListScreen() {
         stickySectionHeadersEnabled
         showsVerticalScrollIndicator={false}
         renderSectionHeader={({ section }) => (
-          <View style={[styles.sectionHeader, { backgroundColor: sectionBg, borderBottomColor: border }]}>
+          <View
+            style={[
+              styles.sectionHeader,
+              { backgroundColor: sectionBg, borderBottomColor: border },
+            ]}
+          >
             <StyledText style={[styles.sectionTitle, { color: fgMuted }]}>
               {section.title}
             </StyledText>
@@ -135,7 +142,10 @@ export default function ArtistListScreen() {
             <StyledText style={[styles.chevron, { color: fgMuted }]}>›</StyledText>
           </TouchableOpacity>
         )}
-        contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 16 }]}
+        contentContainerStyle={[
+          styles.listContent,
+          { paddingBottom: insets.bottom + 16 },
+        ]}
         ListEmptyComponent={
           <View style={styles.centered}>
             <StyledText style={[styles.h2, { color: fg }]}>No Music Found</StyledText>
