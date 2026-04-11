@@ -34,6 +34,11 @@ export default function NowPlayingScreen() {
   const isPlaying = playbackState.state === State.Playing;
   const { position, duration } = progress;
 
+  // Keep a snapshot so the UI doesn't blank out during the dismiss animation
+  const lastTrackRef = useRef(activeTrack);
+  if (activeTrack) lastTrackRef.current = activeTrack;
+  const displayTrack = activeTrack ?? lastTrackRef.current;
+
   // ─── Seek bar ──────────────────────────────────────────────────────────────
   const seekAnim = useRef(new Animated.Value(0)).current;
   const isDragging = useRef(false);
@@ -228,7 +233,7 @@ export default function NowPlayingScreen() {
   const viewProps = {
     theme,
     insets,
-    activeTrack,
+    activeTrack: displayTrack,
     isPlaying,
     labelSecs,
     duration,

@@ -16,6 +16,7 @@ import TrackPlayer, {
 } from "react-native-track-player";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Track } from "@/types/music";
+import { router, useSegments } from "expo-router";
 import { pushNowPlayingAnimated } from "@/hooks/useNowPlayingNav";
 
 const STORAGE_KEY = "player_state_v2";
@@ -99,6 +100,7 @@ async function setupPlayer() {
 export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const activeTrack = useActiveTrack();
   const playbackState = usePlaybackState();
+  const segments = useSegments();
 
   const [currentTrack, setCurrentTrack] = useState<Track | null>(null);
   const [queue, setQueue] = useState<Track[]>([]);
@@ -120,6 +122,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!activeTrack?.id) {
       setCurrentTrack(null);
+      // Queue ended or player reset — dismiss now playing if it's open
+      if (segments.includes("nowplaying" as never)) {
+        router.back();
+      }
       return;
     }
     const track = trackMapRef.current.get(activeTrack.id);

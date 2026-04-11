@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Animated } from "react-native";
 import { router, useSegments } from "expo-router";
 import {
@@ -30,26 +30,47 @@ export function MiniPlayer() {
   const slideAnim = useRef(new Animated.Value(60)).current;
   const hasAnimated = useRef(false);
 
+  // Keep a snapshot of the last active track so we can still render during slide-out
+  const lastTrackRef = useRef(activeTrack);
+  const [visible, setVisible] = useState(false);
+  const dismissingRef = useRef(false);
+
   useEffect(() => {
-    if (activeTrack && !hasAnimated.current) {
-      hasAnimated.current = true;
-      Animated.spring(slideAnim, {
-        toValue: 0,
-        useNativeDriver: true,
-        tension: 100,
-        friction: 14,
-      }).start();
-    }
-    if (!activeTrack) {
+    if (activeTrack) {
+      lastTrackRef.current = activeTrack;
+      dismissingRef.current = false;
+      setVisible(true);
+      if (!hasAnimated.current) {
+        hasAnimated.current = true;
+        slideAnim.setValue(60);
+        Animated.spring(slideAnim, {
+          toValue: 0,
+          useNativeDriver: true,
+          tension: 100,
+          friction: 14,
+        }).start();
+      }
+    } else if (visible && !dismissingRef.current) {
+      // Track went away — slide down then hide
+      dismissingRef.current = true;
       hasAnimated.current = false;
-      slideAnim.setValue(60);
+      Animated.timing(slideAnim, {
+        toValue: 80,
+        duration: 250,
+        useNativeDriver: true,
+      }).start(() => {
+        setVisible(false);
+        dismissingRef.current = false;
+      });
     }
   }, [!!activeTrack]);
 
-  if (!activeTrack || segments.includes("nowplaying" as never)) return null;
+  const displayTrack = activeTrack ?? lastTrackRef.current;
+
+  if (!visible || !displayTrack || segments.includes("nowplaying" as never)) return null;
 
   const props: MiniPlayerViewProps = {
-    activeTrack,
+    activeTrack: displayTrack,
     isPlaying,
     progressRatio,
     slideAnim,
@@ -64,7 +85,7 @@ export function MiniPlayer() {
       triggerHaptic();
       TrackPlayer.skipToNext();
     },
-    hasArtwork: !!activeTrack.artwork,
+    hasArtwork: !!displayTrack.artwork,
   };
 
   return theme.variant === "light"
