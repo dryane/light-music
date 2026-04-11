@@ -20,7 +20,7 @@ export function TrackRowLight({
     <TouchableOpacity
       onPress={onPress}
       activeOpacity={0.5}
-      style={[styles.row, { borderBottomColor: border, fontFamily: font }]}
+      style={[styles.row, { fontFamily: font }]}
     >
       <View style={styles.numWrap}>
         {isActive ? (

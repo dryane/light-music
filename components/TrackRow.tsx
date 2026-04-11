@@ -35,24 +35,3 @@ export function TrackRow({ track, queue, trackNumber }: TrackRowProps) {
     ? <TrackRowLight {...props} />
     : <TrackRowFull {...props} />;
 }
-
-const styles = StyleSheet.create({
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 10,
-    paddingHorizontal: 18,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    gap: 12,
-  },
-  numWrap: {
-    width: 18,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  num: { fontSize: 9 },
-  playOffset: { marginLeft: 2 },
-  info: { flex: 1 },
-  title: { fontSize: 11 },
-  duration: { fontSize: 9 },
-});
