@@ -1,9 +1,9 @@
 import React, { ReactNode } from "react";
-import { View, StyleSheet, StyleProp, ViewStyle } from "react-native";
-import { Header } from "@/components/Header";
-import { useTheme } from "@/hooks/useTheme";
+import { StyleProp, ViewStyle } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
-import { n } from "@/utils/scaling";
+import { useTheme } from "@/hooks/useTheme";
+import { ContentContainerFull } from "@/components/content-container/ContentContainerFull";
+import { ContentContainerLight } from "@/components/content-container/ContentContainerLight";
 
 interface ContentContainerProps {
     headerTitle?: string;
@@ -24,34 +24,20 @@ export default function ContentContainer({
     onRightIconPress,
     style,
 }: ContentContainerProps) {
-    const { bg } = useTheme();
+    const theme = useTheme();
 
-    return (
-        <View style={[styles.container, { backgroundColor: bg }]}>
-            {headerTitle && (
-                <Header
-                    headerTitle={headerTitle}
-                    hideBackButton={hideBackButton}
-                    rightIcon={showRightIcon ? rightIcon : undefined}
-                    onRightIconPress={onRightIconPress}
-                />
-            )}
-            <View style={[styles.content, style]}>{children ?? null}</View>
-        </View>
-    );
+    const props = {
+        headerTitle,
+        children,
+        hideBackButton,
+        rightIcon,
+        showRightIcon,
+        onRightIconPress,
+        style,
+        theme,
+    };
+
+    return theme.variant === "light"
+        ? <ContentContainerLight {...props} />
+        : <ContentContainerFull {...props} />;
 }
-
-const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        width: "100%",
-    },
-    content: {
-        flex: 1,
-        justifyContent: "flex-start",
-        alignItems: "flex-start",
-        paddingHorizontal: n(37),
-        paddingTop: n(14),
-        gap: n(47),
-    },
-});

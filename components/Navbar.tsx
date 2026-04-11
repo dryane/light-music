@@ -1,10 +1,9 @@
 import React from "react";
 import { MaterialIcons } from "@expo/vector-icons";
-import { StyleSheet, View } from "react-native";
-import { HapticPressable } from "./HapticPressable";
-import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 import { useTheme } from "@/hooks/useTheme";
-import { n } from "@/utils/scaling";
+import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
+import { NavbarFull } from "@/components/navbar/NavbarFull";
+import { NavbarLight } from "@/components/navbar/NavbarLight";
 
 export interface TabConfigItem {
     name: string;
@@ -19,32 +18,11 @@ interface NavbarProps {
 }
 
 export function Navbar({ tabsConfig, currentScreenName, navigation }: NavbarProps) {
-    const { fg, fgMuted, bg } = useTheme();
+    const theme = useTheme();
 
-    return (
-        <View style={[styles.navbar, { backgroundColor: bg }]}>
-            {tabsConfig?.map((tab) => (
-                <HapticPressable
-                    key={tab.screenName}
-                    onPress={() => navigation.navigate(tab.screenName)}
-                >
-                    <MaterialIcons
-                        name={tab.iconName}
-                        size={n(48)}
-                        color={tab.screenName === currentScreenName ? fg : fgMuted}
-                    />
-                </HapticPressable>
-            ))}
-        </View>
-    );
+    const props = { tabsConfig, currentScreenName, navigation, theme };
+
+    return theme.variant === "light"
+        ? <NavbarLight {...props} />
+        : <NavbarFull {...props} />;
 }
-
-const styles = StyleSheet.create({
-    navbar: {
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "space-between",
-        paddingVertical: n(11),
-        paddingHorizontal: n(20),
-    },
-});

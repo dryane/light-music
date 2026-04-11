@@ -1,7 +1,7 @@
 import React from "react";
-import { View, StyleSheet } from "react-native";
-import { StyledText } from "@/components/StyledText";
 import { useTheme } from "@/hooks/useTheme";
+import { SectionHeaderFull } from "@/components/section-header/SectionHeaderFull";
+import { SectionHeaderLight } from "@/components/section-header/SectionHeaderLight";
 
 interface SectionHeaderProps {
   title: string;
@@ -9,23 +9,11 @@ interface SectionHeaderProps {
 }
 
 export function SectionHeader({ title, paddingHorizontal = 18 }: SectionHeaderProps) {
-  const { fgMuted, sectionBg, border } = useTheme();
-  return (
-    <View style={[styles.wrap, { backgroundColor: sectionBg, borderBottomColor: border, paddingHorizontal }]}>
-      <StyledText style={[styles.text, { color: fgMuted }]}>{title}</StyledText>
-    </View>
-  );
-}
+  const theme = useTheme();
 
-const styles = StyleSheet.create({
-  wrap: {
-    paddingVertical: 5,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  text: {
-    fontSize: 10,
-    fontWeight: "600",
-    letterSpacing: 1,
-    textTransform: "uppercase",
-  },
-});
+  const props = { title, paddingHorizontal, theme };
+
+  return theme.variant === "light"
+    ? <SectionHeaderLight {...props} />
+    : <SectionHeaderFull {...props} />;
+}

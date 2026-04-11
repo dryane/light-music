@@ -1,18 +1,12 @@
 import React from "react";
-import { View, StyleSheet } from "react-native";
 import { useTheme } from "@/hooks/useTheme";
-import { n } from "@/utils/scaling";
+import { SeparatorFull } from "@/components/separator/SeparatorFull";
+import { SeparatorLight } from "@/components/separator/SeparatorLight";
 
 export function Separator() {
-    const { invertColors } = useTheme();
-    const color = invertColors ? "rgba(0,0,0,0.2)" : "rgba(255,255,255,0.2)";
+    const theme = useTheme();
 
-    return <View style={[styles.separator, { backgroundColor: color }]} />;
+    return theme.variant === "light"
+        ? <SeparatorLight theme={theme} />
+        : <SeparatorFull theme={theme} />;
 }
-
-const styles = StyleSheet.create({
-    separator: {
-        height: n(1),
-        width: "100%",
-    },
-});
