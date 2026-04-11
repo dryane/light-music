@@ -12,7 +12,7 @@ module.exports = async function () {
       await TrackPlayer.skipToPrevious();
     }
   });
-  TrackPlayer.addEventListener(Event.RemoteStop, () => TrackPlayer.destroy());
+  TrackPlayer.addEventListener(Event.RemoteStop, () => TrackPlayer.reset());
   TrackPlayer.addEventListener(Event.RemoteSeek, ({ position }) => {
     TrackPlayer.seekTo(position);
   });

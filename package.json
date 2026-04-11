@@ -1,7 +1,7 @@
 {
 	"name": "tunes",
 	"main": "expo-router/entry",
-	"version": "1.0.12",
+	"version": "1.0.13",
 	"scripts": {
 		"build:android": "node build.js",
 		"android": "expo run:android",
