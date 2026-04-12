@@ -18,7 +18,8 @@ const USE_EMBEDDED_ART = false;
 
 export interface TrackMetadata {
   title: string;
-  artist: string;
+  artist: string;       // track-level performer (common.artist)
+  albumArtist: string;  // album-level artist (common.albumartist → common.artist → filename)
   album: string;
   albumArtBase64: string | null;
   year: number | null;
@@ -53,10 +54,18 @@ export async function readMetadata(
 
     const { common } = metadata;
     const title = common.title?.trim() || fallback.title;
-    const artist =
+
+    // albumArtist: prefer common.albumartist, fall back to common.artist, then filename
+    const albumArtist =
       (!isUnknown(common.albumartist) ? common.albumartist?.trim() : null) ||
       (!isUnknown(common.artist) ? common.artist?.trim() : null) ||
       fallback.artist;
+
+    // artist: prefer common.artist, fall back to albumArtist
+    const artist =
+      (!isUnknown(common.artist) ? common.artist?.trim() : null) ||
+      albumArtist;
+
     const album =
       (!isUnknown(common.album) ? common.album?.trim() : null) ||
       "Unknown Album";
@@ -76,11 +85,12 @@ export async function readMetadata(
       }
     }
 
-    return { title, artist, album, albumArtBase64, year, trackNumber };
+    return { title, artist, albumArtist, album, albumArtBase64, year, trackNumber };
   } catch {
     return {
       title: fallback.title,
       artist: fallback.artist,
+      albumArtist: fallback.artist,
       album: "Unknown Album",
       albumArtBase64: null,
       year: null,

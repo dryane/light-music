@@ -18,6 +18,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Track } from "@/types/music";
 import { router, useSegments } from "expo-router";
 import { pushNowPlayingAnimated } from "@/hooks/useNowPlayingNav";
+import { playerActions } from "@/playerActions";
 
 const STORAGE_KEY = "player_state_v2";
 
@@ -32,10 +33,13 @@ interface PlayerContextType {
   queue: Track[];
   isPlaying: boolean;
   playTrack: (track: Track, queue?: Track[]) => Promise<void>;
+  play: () => void;
+  pause: () => void;
   togglePlayPause: () => void;
   skipNext: () => Promise<void>;
   skipPrev: () => Promise<void>;
-  seekTo: (ms: number) => void;
+  stop: () => void;
+  seekTo: (seconds: number) => void;
   restoreFromLibrary: (allTracks: Track[]) => Promise<void>;
 }
 
@@ -133,14 +137,14 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   }, [activeTrack?.id]);
 
   // Update Bluetooth/lock screen artwork when track changes
-useEffect(() => {
-  if (!currentTrack?.albumArt || !ready) return;
-  TrackPlayer.updateNowPlayingMetadata({
-    artwork: currentTrack.albumArt,
-  }).catch(() => {});
-}, [currentTrack?.albumArt, ready]);
+  useEffect(() => {
+    if (!currentTrack?.albumArt || !ready) return;
+    TrackPlayer.updateNowPlayingMetadata({
+      artwork: currentTrack.albumArt,
+    }).catch(() => {});
+  }, [currentTrack?.albumArt, ready]);
 
-  // Persist position every 5s while playing — fetch position directly from RNTP
+  // Persist position every 5s while playing
   useEffect(() => {
     if (!isPlaying || !currentTrack) return;
     const interval = setInterval(async () => {
@@ -161,6 +165,57 @@ useEffect(() => {
         } as SavedState));
       } catch {}
     }, 1000);
+  }, []);
+
+  // ─── Master playback functions ─────────────────────────────────────────────
+
+  const play = useCallback(() => {
+    TrackPlayer.play();
+  }, []);
+
+  const pause = useCallback(() => {
+    TrackPlayer.pause();
+  }, []);
+
+  const togglePlayPause = useCallback(() => {
+    if (isPlaying) {
+      TrackPlayer.pause();
+    } else {
+      TrackPlayer.play();
+    }
+  }, [isPlaying]);
+
+  const skipNext = useCallback(async () => {
+    try { await TrackPlayer.skipToNext(); } catch {}
+  }, []);
+
+  const skipPrev = useCallback(async () => {
+    const progress = await TrackPlayer.getProgress();
+    if (progress.position > 5) {
+      await TrackPlayer.seekTo(0);
+    } else {
+      try { await TrackPlayer.skipToPrevious(); } catch {}
+    }
+  }, []);
+
+  const stop = useCallback(() => {
+    TrackPlayer.reset();
+  }, []);
+
+  const seekTo = useCallback((seconds: number) => {
+    TrackPlayer.seekTo(seconds);
+  }, []);
+
+  const onQueueEnded = useCallback(() => {
+    TrackPlayer.reset();
+  }, []);
+
+  const onDuck = useCallback((paused: boolean, permanent: boolean) => {
+    if (permanent || paused) {
+      TrackPlayer.pause();
+    } else {
+      TrackPlayer.play();
+    }
   }, []);
 
   const playTrack = useCallback(async (track: Track, newQueue?: Track[]) => {
@@ -187,31 +242,6 @@ useEffect(() => {
 
     persistState(track.id, 0, effectiveQueue);
   }, [ready, persistState]);
-
-  const togglePlayPause = useCallback(() => {
-    if (isPlaying) {
-      TrackPlayer.pause();
-    } else {
-      TrackPlayer.play();
-    }
-  }, [isPlaying]);
-
-  const skipNext = useCallback(async () => {
-    try { await TrackPlayer.skipToNext(); } catch {}
-  }, []);
-
-  const skipPrev = useCallback(async () => {
-    const progress = await TrackPlayer.getProgress();
-    if (progress.position * 1000 > 5000) {
-      await TrackPlayer.seekTo(0);
-      return;
-    }
-    try { await TrackPlayer.skipToPrevious(); } catch {}
-  }, []);
-
-  const seekTo = useCallback((ms: number) => {
-    TrackPlayer.seekTo(ms / 1000);
-  }, []);
 
   const restoreFromLibrary = useCallback(async (allTracks: Track[]) => {
     if (restored || !ready) return;
@@ -248,6 +278,19 @@ useEffect(() => {
     } catch {}
   }, [restored, ready]);
 
+  // ─── Register master functions with the background service bridge ──────────
+  useEffect(() => {
+    playerActions.play = play;
+    playerActions.pause = pause;
+    playerActions.togglePlayPause = togglePlayPause;
+    playerActions.skipNext = skipNext;
+    playerActions.skipPrev = skipPrev;
+    playerActions.stop = stop;
+    playerActions.seekTo = seekTo;
+    playerActions.onQueueEnded = onQueueEnded;
+    playerActions.onDuck = onDuck;
+  }, [play, pause, togglePlayPause, skipNext, skipPrev, stop, seekTo, onQueueEnded, onDuck]);
+
   return (
     <PlayerContext.Provider
       value={{
@@ -255,9 +298,12 @@ useEffect(() => {
         queue,
         isPlaying,
         playTrack,
+        play,
+        pause,
         togglePlayPause,
         skipNext,
         skipPrev,
+        stop,
         seekTo,
         restoreFromLibrary,
       }}

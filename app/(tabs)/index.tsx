@@ -33,6 +33,7 @@ export default function ArtistListScreen() {
   const {
     artists,
     loading,
+    initialized,
     scanProgress,
     scanStatus,
     error,
@@ -63,6 +64,7 @@ export default function ArtistListScreen() {
     theme,
     insets,
     sections,
+    initialized,
     permissionGranted,
     loading,
     scanProgress,

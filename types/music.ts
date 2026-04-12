@@ -1,12 +1,13 @@
 export interface Track {
   id: string;
   title: string;
-  artist: string;
-  artistId: string; // normalised lowercase key
+  artist: string;       // track-level artist (performer) — used in player UI
+  albumArtist: string;  // album-level artist — used for library grouping
+  artistId: string;     // normalised lowercase key (from albumArtist)
   album: string;
-  albumId: string;  // normalised key
+  albumId: string;      // normalised key
   albumArt: string | null; // base64 data URI or null
-  duration: number; // ms
+  duration: number;     // ms
   uri: string;
   year: number | null;
   trackNumber: number | null;
@@ -15,7 +16,7 @@ export interface Track {
 export interface Album {
   id: string;
   title: string;
-  artist: string;
+  albumArtist: string;
   artistId: string;
   year: number | null;
   albumArt: string | null;

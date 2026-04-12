@@ -12,6 +12,7 @@ export interface ArtistListViewProps {
   insets: { top: number; bottom: number };
   sections: ArtistListSection[];
   // State flags
+  initialized: boolean;
   permissionGranted: boolean;
   loading: boolean;
   scanProgress: number;

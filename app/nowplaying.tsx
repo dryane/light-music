@@ -4,7 +4,7 @@ import {
   Animated,
   Dimensions,
 } from "react-native";
-import TrackPlayer, {
+import {
   useProgress,
   useActiveTrack,
   usePlaybackState,
@@ -24,7 +24,7 @@ const DISMISS_VELOCITY = 0.6;
 const ART_SWIPE_THRESHOLD = 80;
 
 export default function NowPlayingScreen() {
-  const { togglePlayPause, skipNext, skipPrev } = usePlayer();
+  const { togglePlayPause, skipNext, skipPrev, play, pause, seekTo } = usePlayer();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
 
@@ -52,6 +52,14 @@ export default function NowPlayingScreen() {
 
   useEffect(() => { durationRef.current = duration; }, [duration]);
   useEffect(() => { isPlayingRef.current = isPlaying; }, [isPlaying]);
+
+  // Keep refs for functions used inside PanResponder closures
+  const pauseRef = useRef(pause);
+  const playRef = useRef(play);
+  const seekToRef = useRef(seekTo);
+  useEffect(() => { pauseRef.current = pause; }, [pause]);
+  useEffect(() => { playRef.current = play; }, [play]);
+  useEffect(() => { seekToRef.current = seekTo; }, [seekTo]);
 
   useEffect(() => {
     seekAnim.stopAnimation();
@@ -97,7 +105,7 @@ export default function NowPlayingScreen() {
         isDragging.current = true;
         wasPlaying.current = isPlayingRef.current;
         seekAnim.stopAnimation();
-        TrackPlayer.pause();
+        pauseRef.current();
         setDragging(true);
         const ratio = screenXToRatio(e.nativeEvent.pageX);
         seekAnim.setValue(ratio);
@@ -115,17 +123,16 @@ export default function NowPlayingScreen() {
         const targetSecs = ratio * durationRef.current;
         seekAnim.setValue(ratio);
         setLabelSecs(targetSecs);
-        TrackPlayer.seekTo(targetSecs).then(() => {
-          isDragging.current = false;
-          setDragging(false);
-          if (wasPlaying.current) TrackPlayer.play();
-        });
+        seekToRef.current(targetSecs);
+        isDragging.current = false;
+        setDragging(false);
+        if (wasPlaying.current) playRef.current();
       },
 
       onPanResponderTerminate: () => {
         isDragging.current = false;
         setDragging(false);
-        if (wasPlaying.current) TrackPlayer.play();
+        if (wasPlaying.current) playRef.current();
       },
     })
   ).current;

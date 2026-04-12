@@ -13,6 +13,7 @@ export function ArtistListViewFull({
   theme,
   insets,
   sections,
+  initialized,
   permissionGranted,
   loading,
   scanProgress,
@@ -22,6 +23,10 @@ export function ArtistListViewFull({
   onNavigateToArtist,
 }: ArtistListViewProps) {
   const { fg, fgMuted, bg, sectionBg, border } = theme;
+
+  if (!initialized) {
+    return <View style={[styles.root, { backgroundColor: bg }]} />;
+  }
 
   if (!permissionGranted) {
     return (
@@ -43,6 +48,7 @@ export function ArtistListViewFull({
   }
 
   if (loading && scanProgress < 1) {
+
     return (
       <View style={[styles.root, { backgroundColor: bg, paddingTop: insets.top }]}>
         <View style={StyleSheet.absoluteFill}>

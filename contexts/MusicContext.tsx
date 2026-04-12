@@ -8,6 +8,7 @@ interface MusicContextType {
   albums: Album[];
   artists: Artist[];
   loading: boolean;
+  initialized: boolean;
   scanProgress: number;
   scanStatus: string;
   error: string | null;
@@ -39,6 +40,7 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
       albums: library.albums,
       artists: library.artists,
       loading: library.loading,
+      initialized: library.initialized,
       scanProgress: library.scanProgress,
       scanStatus: library.scanStatus,
       error: library.error,
@@ -52,6 +54,7 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
       library.albums,
       library.artists,
       library.loading,
+      library.initialized,
       library.scanProgress,
       library.scanStatus,
       library.error,

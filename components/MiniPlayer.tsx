@@ -7,9 +7,9 @@ import {
   useProgress,
   State,
 } from "react-native-track-player";
-import TrackPlayer from "react-native-track-player";
 import { useTheme } from "@/hooks/useTheme";
 import { useHaptic } from "@/contexts/HapticContext";
+import { usePlayer } from "@/contexts/PlayerContext";
 import { MiniPlayerFull } from "@/components/mini-player/MiniPlayerFull";
 import { MiniPlayerLight } from "@/components/mini-player/MiniPlayerLight";
 import { MiniPlayerViewProps } from "@/components/mini-player/types";
@@ -20,6 +20,7 @@ export function MiniPlayer() {
   const progress = useProgress(1000);
   const theme = useTheme();
   const { triggerHaptic } = useHaptic();
+  const { togglePlayPause, skipNext, stop } = usePlayer();
   const segments = useSegments();
 
   const isPlaying = playbackState.state === State.Playing;
@@ -76,14 +77,14 @@ export function MiniPlayer() {
     slideAnim,
     theme,
     onNavigate: () => router.push("/nowplaying"),
-    onStop: () => TrackPlayer.reset(),
+    onStop: () => stop(),
     onTogglePlay: () => {
       triggerHaptic();
-      isPlaying ? TrackPlayer.pause() : TrackPlayer.play();
+      togglePlayPause();
     },
     onSkipNext: () => {
       triggerHaptic();
-      TrackPlayer.skipToNext();
+      skipNext();
     },
     hasArtwork: !!displayTrack.artwork,
   };

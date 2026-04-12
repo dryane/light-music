@@ -1,8 +1,8 @@
 /**
  * Builds Album and Artist collections from a flat Track array.
  *
- * - Albums are keyed by albumId (normalised artist__album string).
- * - Artists are keyed by artistId (normalised artist name).
+ * - Albums are keyed by albumId (normalised albumArtist__album string).
+ * - Artists are keyed by artistId (normalised albumArtist name).
  * - Unknown artists are excluded from the Artist list.
  * - Albums sort by year ascending, then title.
  * - Artists sort alphabetically, ignoring leading "The"/"A".
@@ -25,7 +25,7 @@ export function buildLibrary(tracks: Track[]): {
       albumMap.set(track.albumId, {
         id: track.albumId,
         title: track.album,
-        artist: track.artist,
+        albumArtist: track.albumArtist,
         artistId: track.artistId,
         year: track.year,
         albumArt: track.albumArt,
@@ -60,7 +60,7 @@ export function buildLibrary(tracks: Track[]): {
     if (!artistMap.has(alb.artistId)) {
       artistMap.set(alb.artistId, {
         id: alb.artistId,
-        name: alb.artist,
+        name: alb.albumArtist,
         albums: [],
         trackCount: 0,
       });

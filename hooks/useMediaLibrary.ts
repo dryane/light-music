@@ -34,7 +34,7 @@ import { buildLibrary } from "@/utils/libraryBuilder";
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
-const CACHE_KEY = "library_cache_v12";
+const CACHE_KEY = "library_cache_v13";
 const CACHE_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 365;
 const CONCURRENCY = 4;
 
@@ -53,6 +53,7 @@ interface ScanState {
   albums: Album[];
   artists: Artist[];
   loading: boolean;
+  initialized: boolean;
   scanProgress: number;
   error: string | null;
   permissionGranted: boolean;
@@ -72,6 +73,7 @@ const INITIAL_STATE: ScanState = {
   albums: [],
   artists: [],
   loading: true,
+  initialized: false,
   scanProgress: 0,
   error: null,
   permissionGranted: false,
@@ -120,14 +122,25 @@ export function useMediaLibrary() {
   const scanInProgress = useRef(false);
 
   // ── Scan ────────────────────────────────────────────────────────────────────
+  const silentScanRef = useRef(false);
+
   const scan = useCallback(
     async (
       silent = false,
       existingCache?: CachedLibrary | null,
       skipArt = false
     ) => {
-      if (scanInProgress.current) return;
+      // If a scan is already running, only block if this is also silent
+      // A non-silent (user-facing) scan always takes priority
+      if (scanInProgress.current) {
+        if (silent) return;
+        // Cancel the in-progress silent scan and take over
+        cancelled.current = true;
+        // Wait a tick for the cancelled scan to bail out
+        await new Promise<void>((r) => setTimeout(r, 0));
+      }
       scanInProgress.current = true;
+      silentScanRef.current = silent;
       cancelled.current = false;
 
       if (!silent) {
@@ -139,6 +152,10 @@ export function useMediaLibrary() {
         let assets: MediaLibrary.Asset[] = [];
         let after: string | undefined;
         let hasMore = true;
+
+        if (!silent) {
+          setState((s) => ({ ...s, scanStatus: "Finding audio files…" }));
+        }
 
         while (hasMore) {
           const page = await MediaLibrary.getAssetsAsync({
@@ -157,6 +174,10 @@ export function useMediaLibrary() {
         }
 
         if (cancelled.current) return;
+
+        if (!silent) {
+          setState((s) => ({ ...s, scanStatus: "Preparing library…" }));
+        }
 
         await ensureArtDir();
 
@@ -205,15 +226,30 @@ export function useMediaLibrary() {
           tracks.push({ ...cached, albumArt: resolvedArt });
         }
 
+        // Show progress for cached assets immediately
+        if (!silent && cachedAssets.length > 0 && assets.length > 0) {
+          setState((s) => ({
+            ...s,
+            scanProgress: cachedAssets.length / assets.length,
+            scanStatus: "Reading your music files…",
+          }));
+        }
+
         // ── Phase 1: Metadata scan ─────────────────────────────────────────
+
         if (newAssets.length > 0) {
           let processed = 0;
 
-          const tasks = newAssets.map((asset) => async () => {
-            if (cancelled.current) return;
+          if (!silent) {
+            setState((s) => ({ ...s, scanStatus: "Reading your music files…" }));
+          }
 
+          for (let i = 0; i < newAssets.length; i++) {
+            if (cancelled.current) break;
+
+            const asset = newAssets[i];
             const meta = await readMetadata(asset.uri, asset.filename);
-            const aKey = albumKey(meta.artist, meta.album);
+            const aKey = albumKey(meta.albumArtist, meta.album);
 
             if (!artCache.has(aKey)) {
               const existing = await artFileExists(aKey);
@@ -235,7 +271,8 @@ export function useMediaLibrary() {
               id: asset.id,
               title: meta.title,
               artist: meta.artist,
-              artistId: artistKey(meta.artist),
+              albumArtist: meta.albumArtist,
+              artistId: artistKey(meta.albumArtist),
               album: meta.album,
               albumId: aKey,
               albumArt: artCache.get(aKey) ?? null,
@@ -247,16 +284,20 @@ export function useMediaLibrary() {
 
             processed++;
             if (!silent) {
+              const progress = (cachedAssets.length + processed) / assets.length;
+              const status = `${meta.albumArtist ?? "Unknown"} — ${meta.album ?? "Unknown"}`;
+
               setState((s) => ({
                 ...s,
-                scanProgress:
-                  (cachedAssets.length + processed) / assets.length,
-                scanStatus: `${meta.artist ?? "Unknown"} — ${meta.album ?? "Unknown"}`,
+                scanProgress: progress,
+                scanStatus: status,
               }));
+              // Yield to the event loop every few tracks so React can paint
+              if (processed % 3 === 0 || processed === newAssets.length) {
+                await new Promise<void>((r) => setTimeout(r, 16));
+              }
             }
-          });
-
-          await pLimit(tasks, CONCURRENCY);
+          }
         }
 
         if (cancelled.current) return;
@@ -280,6 +321,7 @@ export function useMediaLibrary() {
           albums: lib1.albums,
           artists: lib1.artists,
           loading: false,
+          initialized: true,
           scanProgress: 1,
           scanStatus: "",
           error: null,
@@ -296,16 +338,16 @@ export function useMediaLibrary() {
           for (const track of tracks) {
             if (
               artCache.get(track.albumId) ||
-              isUnknown(track.artist) ||
+              isUnknown(track.albumArtist) ||
               isUnknown(track.album)
             )
               continue;
             if (!seen.has(track.albumId)) {
               seen.add(track.albumId);
-              if (!artistAlbums.has(track.artist))
-                artistAlbums.set(track.artist, []);
+              if (!artistAlbums.has(track.albumArtist))
+                artistAlbums.set(track.albumArtist, []);
               artistAlbums
-                .get(track.artist)!
+                .get(track.albumArtist)!
                 .push({ aKey: track.albumId, title: track.album });
             }
           }
@@ -370,7 +412,7 @@ export function useMediaLibrary() {
   const requestPermission = useCallback(async () => {
     const { granted } = await MediaLibrary.requestPermissionsAsync();
     if (granted) {
-      setState((s) => ({ ...s, permissionGranted: true }));
+      setState((s) => ({ ...s, permissionGranted: true, initialized: true, loading: true, scanProgress: 0 }));
       await scan(false, null);
     }
   }, [scan]);
@@ -380,10 +422,9 @@ export function useMediaLibrary() {
     (async () => {
       const { granted } = await MediaLibrary.getPermissionsAsync();
       if (!granted) {
-        setState((s) => ({ ...s, loading: false }));
+        setState((s) => ({ ...s, loading: false, initialized: true, permissionGranted: false }));
         return;
       }
-      setState((s) => ({ ...s, permissionGranted: true }));
 
       const cache = await loadLibraryCache();
       cacheRef.current = cache;
@@ -401,6 +442,7 @@ export function useMediaLibrary() {
           albums,
           artists,
           loading: false,
+          initialized: true,
           scanProgress: 1,
           scanStatus: "",
           error: null,
@@ -411,6 +453,14 @@ export function useMediaLibrary() {
         // Background rescan after cache display — skip art refetch on resume
         setTimeout(() => scan(true, cache, true), 2000);
       } else {
+        // No cache — show scan view immediately, then start scanning
+        setState((s) => ({
+          ...s,
+          initialized: true,
+          permissionGranted: true,
+          loading: true,
+          scanProgress: 0,
+        }));
         await scan(false, null, false);
       }
     })();
