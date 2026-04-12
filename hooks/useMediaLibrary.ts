@@ -34,7 +34,7 @@ import { buildLibrary } from "@/utils/libraryBuilder";
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
-const CACHE_KEY = "library_cache_v14";
+const CACHE_KEY = "library_cache_v15";
 const CACHE_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 365;
 const CONCURRENCY = 4;
 
