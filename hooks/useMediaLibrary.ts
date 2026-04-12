@@ -32,6 +32,7 @@ import { fetchArtForArtist } from "@/utils/itunesArt";
 import { readMetadata } from "@/utils/metadataReader";
 import { buildLibrary } from "@/utils/libraryBuilder";
 
+
 // ─── Config ───────────────────────────────────────────────────────────────────
 
 const CACHE_KEY = "library_cache_v14";
@@ -39,7 +40,7 @@ const CACHE_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 365;
 const CONCURRENCY = 4;
 
 /** When true, only scans /Download/Persisted/Music/ (Light Phone target path). */
-const LIGHT_PHONE_MODE = true;
+const LIGHT_PHONE_MODE = false;
 const LIGHT_PHONE_MUSIC_PATH = "/Download/Persisted/Music/";
 
 // Set to true to save embedded cover art extracted from file metadata.

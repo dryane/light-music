@@ -1,20 +1,25 @@
 /**
- * Audio file metadata extraction via music-metadata.
+ * Audio file metadata extraction via music-metadata + react-native-fs.
  *
- * Reads the file as base64, converts to Uint8Array, and parses ID3/MP4/FLAC
- * tags. Falls back to filename parsing if the file can't be read or has no tags.
+ * Uses progressive partial reads (64KB → 256KB → full) to avoid loading
+ * entire audio files into JS memory just to read header tags.
  *
- * NOTE: USE_EMBEDDED_ART is intentionally false for Light Phone targets — the
- * device transcoder strips/corrupts embedded art during sync.
+ * Falls back to filename parsing if the file can't be read or has no tags.
  */
 
-import { readAsStringAsync } from "expo-file-system/legacy";
+import RNFS from "react-native-fs";
 import { parseBuffer, selectCover } from "music-metadata";
 import { parseFilename, getMimeType, isUnknown } from "@/utils/stringUtils";
 
 // Set to true to extract embedded cover art from audio files.
 // Keep false for Light Phone — it corrupts embedded art during transcoding.
 const USE_EMBEDDED_ART = false;
+
+// Progressive read sizes — covers all tested file formats
+const CHUNK_SIZES = [
+  64 * 1024,   // 64KB — works for most mp3/m4a files
+  256 * 1024,  // 256KB — covers files with large embedded art pushing tags deeper
+];
 
 export interface TrackMetadata {
   title: string;
@@ -26,8 +31,49 @@ export interface TrackMetadata {
   trackNumber: number | null;
 }
 
+function uriToPath(uri: string): string {
+  if (uri.startsWith("file://")) return uri.replace("file://", "");
+  return uri;
+}
+
+function base64ToBuffer(base64: string): Uint8Array {
+  const binaryStr = atob(base64);
+  const buffer = new Uint8Array(binaryStr.length);
+  for (let i = 0; i < binaryStr.length; i++) {
+    buffer[i] = binaryStr.charCodeAt(i);
+  }
+  return buffer;
+}
+
+/**
+ * Attempt to parse metadata from a buffer.
+ * Returns the common metadata if essential fields are found, null otherwise.
+ */
+async function tryParse(
+  buffer: Uint8Array,
+  mimeType: string,
+  fileSize: number
+) {
+  try {
+    const metadata = await parseBuffer(buffer, { mimeType, size: fileSize });
+    const { common } = metadata;
+    // Consider it complete if we have at least title + some artist + album
+    const hasEssentials = !!(
+      common.title &&
+      (common.artist || common.albumartist) &&
+      common.album
+    );
+    if (hasEssentials) return common;
+    return null;
+  } catch {
+    // EndOfStreamError or parse failure — need more data
+    return null;
+  }
+}
+
 /**
  * Read and parse metadata from an audio file URI.
+ * Uses progressive partial reads for speed.
  * Never throws — returns a best-effort result using filename fallback.
  */
 export async function readMetadata(
@@ -35,33 +81,53 @@ export async function readMetadata(
   filename: string
 ): Promise<TrackMetadata> {
   const fallback = parseFilename(filename);
+  const mimeType = getMimeType(filename);
+  const path = uriToPath(uri);
 
   try {
-    const base64 = await readAsStringAsync(uri, {
-      encoding: "base64" as any,
-    });
+    // Get file size for the parser (it uses this for format detection)
+    const stat = await RNFS.stat(path);
+    const fileSize = Number(stat.size);
 
-    const binaryStr = atob(base64);
-    const buffer = new Uint8Array(binaryStr.length);
-    for (let i = 0; i < binaryStr.length; i++) {
-      buffer[i] = binaryStr.charCodeAt(i);
+    let common = null;
+
+    // Try progressive partial reads
+    for (const chunkSize of CHUNK_SIZES) {
+      if (chunkSize >= fileSize) break; // No point reading a chunk larger than the file
+
+      const base64 = await RNFS.read(path, chunkSize, 0, "base64");
+      const buffer = base64ToBuffer(base64);
+      common = await tryParse(buffer, mimeType, fileSize);
+      if (common) break;
     }
 
-    const metadata = await parseBuffer(buffer, {
-      mimeType: getMimeType(filename),
-      size: buffer.length,
-    });
+    // If partial reads didn't work, read the full file
+    if (!common) {
+      const base64 = await RNFS.readFile(path, "base64");
+      const buffer = base64ToBuffer(base64);
+      common = await tryParse(buffer, mimeType, fileSize);
+    }
 
-    const { common } = metadata;
+    if (!common) {
+      // Parser couldn't extract anything — use filename fallback
+      return {
+        title: fallback.title,
+        artist: fallback.artist,
+        albumArtist: fallback.artist,
+        album: "Unknown Album",
+        albumArtBase64: null,
+        year: null,
+        trackNumber: null,
+      };
+    }
+
     const title = common.title?.trim() || fallback.title;
 
-    // albumArtist: prefer common.albumartist, fall back to common.artist, then filename
     const albumArtist =
       (!isUnknown(common.albumartist) ? common.albumartist?.trim() : null) ||
       (!isUnknown(common.artist) ? common.artist?.trim() : null) ||
       fallback.artist;
 
-    // artist: prefer common.artist, fall back to albumArtist
     const artist =
       (!isUnknown(common.artist) ? common.artist?.trim() : null) ||
       albumArtist;
