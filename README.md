@@ -14,8 +14,6 @@ A minimal music app for the Light Phone 3.
 
 ## Known issues
 
-- Initial Open of app, it may say theres no music on your device, you have to close and re-open and it should start the scan
-
 ## Installation
 
 The latest APK is available in [releases](https://github.com/dryane/light-music/releases/).
