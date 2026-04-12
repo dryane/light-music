@@ -6,6 +6,7 @@ import {
   Animated,
 } from "react-native";
 import { StyledText } from "@/components/StyledText";
+import { MarqueeText } from "@/components/MarqueeText";
 import { AlbumArt } from "@/components/AlbumArt";
 import { PlayPauseButton, SkipPrevButton, SkipNextButton } from "@/components/PlayerButtons";
 import { NowPlayingViewProps, fmt } from "@/views/NowPlayingTypes";
@@ -74,12 +75,9 @@ export function NowPlayingViewFull({
         <StyledText style={[styles.trackTitle, { color: fg }]} numberOfLines={2}>
           {activeTrack.title}
         </StyledText>
-        <StyledText style={[styles.trackSub, { color: fgDim }]} numberOfLines={1}>
-          {activeTrack.artist}
-          {activeTrack.album && activeTrack.album !== "Unknown Album"
-            ? ` · ${activeTrack.album}`
-            : ""}
-        </StyledText>
+        <MarqueeText style={[styles.trackSub, { color: fgDim }]}>
+          {`${activeTrack.artist}${activeTrack.album && activeTrack.album !== "Unknown Album" ? ` · ${activeTrack.album}` : ""}`}
+        </MarqueeText>
       </View>
 
       <View style={styles.progressSection}>
