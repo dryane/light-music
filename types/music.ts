@@ -10,6 +10,7 @@ export interface Track {
   duration: number;     // ms
   uri: string;
   year: number | null;
+  releaseDate: string | null; // ISO date string e.g. "2013-12-06T08:00:00Z"
   trackNumber: number | null;
 }
 
@@ -19,6 +20,7 @@ export interface Album {
   albumArtist: string;
   artistId: string;
   year: number | null;
+  releaseDate: string | null; // ISO date string — from file tags or iTunes
   albumArt: string | null;
   tracks: Track[];
 }

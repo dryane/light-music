@@ -4,7 +4,7 @@
  * - Albums are keyed by albumId (normalised albumArtist__album string).
  * - Artists are keyed by artistId (normalised albumArtist name).
  * - Unknown artists are excluded from the Artist list.
- * - Albums sort by year ascending, then title.
+ * - Albums sort by releaseDate (full precision), then year, then title.
  * - Artists sort alphabetically, ignoring leading "The"/"A".
  * - Tracks within an album sort by trackNumber, then title.
  * - Album art is propagated to all tracks in the album.
@@ -12,6 +12,32 @@
 
 import { Track, Album, Artist } from "@/types/music";
 import { isUnknown } from "@/utils/stringUtils";
+
+/**
+ * Compare two albums chronologically.
+ * Uses releaseDate (ISO string) for full precision when available,
+ * falls back to year, then title.
+ */
+function compareAlbumDates(a: Album, b: Album): number {
+  // Both have releaseDate — compare as strings (ISO dates sort lexicographically)
+  if (a.releaseDate && b.releaseDate) return a.releaseDate.localeCompare(b.releaseDate);
+  // One has releaseDate, the other only year — compare year portions
+  if (a.releaseDate && b.year) {
+    const aYear = new Date(a.releaseDate).getFullYear();
+    if (aYear !== b.year) return aYear - b.year;
+    return -1; // a has more precision, sort it first within same year
+  }
+  if (b.releaseDate && a.year) {
+    const bYear = new Date(b.releaseDate).getFullYear();
+    if (a.year !== bYear) return a.year - bYear;
+    return 1; // b has more precision, sort it first within same year
+  }
+  // Both only have year
+  if (a.year && b.year) return a.year - b.year;
+  if (a.year) return -1;
+  if (b.year) return 1;
+  return a.title.localeCompare(b.title);
+}
 
 export function buildLibrary(tracks: Track[]): {
   albums: Album[];
@@ -28,6 +54,7 @@ export function buildLibrary(tracks: Track[]): {
         albumArtist: track.albumArtist,
         artistId: track.artistId,
         year: track.year,
+        releaseDate: track.releaseDate,
         albumArt: track.albumArt,
         tracks: [],
       });
@@ -36,6 +63,10 @@ export function buildLibrary(tracks: Track[]): {
     alb.tracks.push(track);
     if (!alb.albumArt && track.albumArt) alb.albumArt = track.albumArt;
     if (track.year && (!alb.year || track.year < alb.year)) alb.year = track.year;
+    // Use the earliest releaseDate found across tracks in the album
+    if (track.releaseDate && (!alb.releaseDate || track.releaseDate < alb.releaseDate)) {
+      alb.releaseDate = track.releaseDate;
+    }
   }
 
   for (const alb of albumMap.values()) {
@@ -71,12 +102,7 @@ export function buildLibrary(tracks: Track[]): {
   }
 
   for (const art of artistMap.values()) {
-    art.albums.sort((a, b) => {
-      if (a.year && b.year) return a.year - b.year;
-      if (a.year) return -1;
-      if (b.year) return 1;
-      return a.title.localeCompare(b.title);
-    });
+    art.albums.sort(compareAlbumDates);
   }
 
   // Exclude unknown artists from the browse list
@@ -93,12 +119,7 @@ export function buildLibrary(tracks: Track[]): {
     return nameA.localeCompare(nameB);
   });
 
-  const sortedAlbums = Array.from(albumMap.values()).sort((a, b) => {
-    if (a.year && b.year) return a.year - b.year;
-    if (a.year) return -1;
-    if (b.year) return 1;
-    return a.title.localeCompare(b.title);
-  });
+  const sortedAlbums = Array.from(albumMap.values()).sort(compareAlbumDates);
 
   return { albums: sortedAlbums, artists: sortedArtists };
 }

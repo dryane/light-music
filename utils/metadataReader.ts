@@ -16,10 +16,20 @@ import { parseFilename, getMimeType, isUnknown } from "@/utils/stringUtils";
 const USE_EMBEDDED_ART = false;
 
 // Progressive read sizes — covers all tested file formats
-const CHUNK_SIZES = [
-  64 * 1024,   // 64KB — works for most mp3/m4a files
-  256 * 1024,  // 256KB — covers files with large embedded art pushing tags deeper
+const CHUNK_SMALL = [
+  64 * 1024,     // 64KB — works for most mp3/m4a files
+  256 * 1024,    // 256KB — covers files with large embedded art
+  512 * 1024,    // 512KB
+  1024 * 1024,   // 1MB
 ];
+
+const CHUNK_LARGE = [
+  512 * 1024,    // 512KB — skip small reads for big files
+  1024 * 1024,   // 1MB
+];
+
+// Files above this size skip the 64KB/256KB attempts
+const LARGE_FILE_THRESHOLD = 5 * 1024 * 1024; // 5MB
 
 export interface TrackMetadata {
   title: string;
@@ -28,6 +38,7 @@ export interface TrackMetadata {
   album: string;
   albumArtBase64: string | null;
   year: number | null;
+  releaseDate: string | null; // ISO date string from common.date
   trackNumber: number | null;
 }
 
@@ -80,6 +91,7 @@ export async function readMetadata(
   uri: string,
   filename: string
 ): Promise<TrackMetadata> {
+  const t0 = Date.now();
   const fallback = parseFilename(filename);
   const mimeType = getMimeType(filename);
   const path = uriToPath(uri);
@@ -90,15 +102,22 @@ export async function readMetadata(
     const fileSize = Number(stat.size);
 
     let common = null;
+    let resolvedAt = "full";
+
+    // Large files are more likely to have big embedded art — skip small chunks
+    const chunks = fileSize >= LARGE_FILE_THRESHOLD ? CHUNK_LARGE : CHUNK_SMALL;
 
     // Try progressive partial reads
-    for (const chunkSize of CHUNK_SIZES) {
-      if (chunkSize >= fileSize) break; // No point reading a chunk larger than the file
+    for (const chunkSize of chunks) {
+      if (chunkSize >= fileSize) break;
 
       const base64 = await RNFS.read(path, chunkSize, 0, "base64");
       const buffer = base64ToBuffer(base64);
       common = await tryParse(buffer, mimeType, fileSize);
-      if (common) break;
+      if (common) {
+        resolvedAt = `${chunkSize / 1024}KB`;
+        break;
+      }
     }
 
     // If partial reads didn't work, read the full file
@@ -107,6 +126,12 @@ export async function readMetadata(
       const buffer = base64ToBuffer(base64);
       common = await tryParse(buffer, mimeType, fileSize);
     }
+
+    const picCount = common?.picture?.length ?? 0;
+    const picInfo = picCount > 0
+      ? common!.picture!.map((p: any) => `${p.format}/${(p.data?.length / 1024).toFixed(0)}KB/${p.type}`).join(", ")
+      : "none";
+    console.log(`[META] ${Date.now() - t0}ms @ ${resolvedAt} — ${filename} | art: ${picCount} pic(s) [${picInfo}]`);
 
     if (!common) {
       // Parser couldn't extract anything — use filename fallback
@@ -136,23 +161,30 @@ export async function readMetadata(
       (!isUnknown(common.album) ? common.album?.trim() : null) ||
       "Unknown Album";
     const year = common.year ?? null;
+    const releaseDate = common.date ?? null;
     const trackNumber = common.track?.no ?? null;
 
     let albumArtBase64: string | null = null;
     if (USE_EMBEDDED_ART) {
-      const cover = selectCover(common.picture);
-      if (cover) {
+      const pics = common.picture ?? [];
+      const cover = selectCover(pics);
+      if (cover && cover.data?.length > 0) {
         const b64 = btoa(
           Array.from(cover.data)
             .map((b) => String.fromCharCode(b))
             .join("")
         );
         albumArtBase64 = `data:${cover.format};base64,${b64}`;
+      } else if (pics.length > 0) {
+        console.log(`[META-ART] ${filename}: ${pics.length} pic(s) found but selectCover returned ${cover ? `data.length=${cover.data?.length}` : 'null'}. Types: ${pics.map((p: any) => p.type).join(', ')}`);
       }
     }
 
-    return { title, artist, albumArtist, album, albumArtBase64, year, trackNumber };
-  } catch {
+    return { title, artist, albumArtist, album, albumArtBase64, year, releaseDate, trackNumber };
+  } catch (e) {
+    console.log(`[META] ERROR reading ${filename}: ${e}`);
+    console.log(`[META]   uri: ${uri}`);
+    console.log(`[META]   path: ${uriToPath(uri)}`);
     return {
       title: fallback.title,
       artist: fallback.artist,
@@ -160,6 +192,7 @@ export async function readMetadata(
       album: "Unknown Album",
       albumArtBase64: null,
       year: null,
+      releaseDate: null,
       trackNumber: null,
     };
   }

@@ -32,7 +32,6 @@ import { fetchArtForArtist } from "@/utils/itunesArt";
 import { readMetadata } from "@/utils/metadataReader";
 import { buildLibrary } from "@/utils/libraryBuilder";
 
-
 // ─── Config ───────────────────────────────────────────────────────────────────
 
 const CACHE_KEY = "library_cache_v14";
@@ -40,7 +39,7 @@ const CACHE_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 365;
 const CONCURRENCY = 4;
 
 /** When true, only scans /Download/Persisted/Music/ (Light Phone target path). */
-const LIGHT_PHONE_MODE = false;
+const LIGHT_PHONE_MODE = true;
 const LIGHT_PHONE_MUSIC_PATH = "/Download/Persisted/Music/";
 
 // Set to true to save embedded cover art extracted from file metadata.
@@ -240,15 +239,25 @@ export function useMediaLibrary() {
 
         if (newAssets.length > 0) {
           let processed = 0;
+          let lastStatus = "Reading your music files…";
 
+          // Progress updates via interval timer — runs on the main event loop
+          // so React can paint, regardless of how pLimit batches the work
+          let progressInterval: ReturnType<typeof setInterval> | null = null;
           if (!silent) {
-            setState((s) => ({ ...s, scanStatus: "Reading your music files…" }));
+            setState((s) => ({ ...s, scanStatus: lastStatus }));
+            progressInterval = setInterval(() => {
+              setState((s) => ({
+                ...s,
+                scanProgress: (cachedAssets.length + processed) / assets.length,
+                scanStatus: lastStatus,
+              }));
+            }, 50);
           }
 
-          for (let i = 0; i < newAssets.length; i++) {
-            if (cancelled.current) break;
+          const tasks = newAssets.map((asset) => async () => {
+            if (cancelled.current) return;
 
-            const asset = newAssets[i];
             const meta = await readMetadata(asset.uri, asset.filename);
             const aKey = albumKey(meta.albumArtist, meta.album);
 
@@ -280,24 +289,24 @@ export function useMediaLibrary() {
               duration: asset.duration * 1000,
               uri: asset.uri,
               year: meta.year,
+              releaseDate: meta.releaseDate,
               trackNumber: meta.trackNumber,
             });
 
             processed++;
-            if (!silent) {
-              const progress = (cachedAssets.length + processed) / assets.length;
-              const status = `${meta.albumArtist ?? "Unknown"} — ${meta.album ?? "Unknown"}`;
+            lastStatus = `${meta.albumArtist ?? "Unknown"} — ${meta.album ?? "Unknown"}`;
+          });
 
-              setState((s) => ({
-                ...s,
-                scanProgress: progress,
-                scanStatus: status,
-              }));
-              // Yield to the event loop every few tracks so React can paint
-              if (processed % 3 === 0 || processed === newAssets.length) {
-                await new Promise<void>((r) => setTimeout(r, 16));
-              }
-            }
+          await pLimit(tasks, CONCURRENCY);
+
+          // Clean up progress timer and do a final update
+          if (progressInterval) {
+            clearInterval(progressInterval);
+            setState((s) => ({
+              ...s,
+              scanProgress: (cachedAssets.length + newAssets.length) / assets.length,
+              scanStatus: "",
+            }));
           }
         }
 
