@@ -28,6 +28,11 @@ function buildSections(artists: Artist[]): ArtistListSection[] {
   return keys.map((k) => ({ title: k, data: map.get(k)! }));
 }
 
+import { probeMusicBrainz } from "@/utils/musicBrainzProbe";
+
+// Test a few albums
+probeMusicBrainz("Eleventyseven", "Good Spells - EP");
+
 export default function ArtistListScreen() {
   const theme = useTheme();
   const {

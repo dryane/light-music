@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useMusic } from "@/contexts/MusicContext";
@@ -10,11 +10,16 @@ import { AlbumScreenViewLight } from "@/views/AlbumScreenViewLight";
 
 export default function AlbumScreen() {
   const { albumId } = useLocalSearchParams<{ albumId: string }>();
-  const { albums, fetchingArtAlbumIds = new Set() } = useMusic();
+  const { albums, fetchingArtAlbumIds = new Set(), fetchMissingArt } = useMusic();
   const { playTrack } = usePlayer();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { panHandlers, translateX } = useSwipeBack();
+
+  // Trigger art fetch (TTL-gated) when an album view is opened
+  useEffect(() => {
+    fetchMissingArt();
+  }, []);
 
   const album = albums.find((a) => a.id === albumId);
   const isArtLoading = album ? fetchingArtAlbumIds.has(album.id) : false;

@@ -16,6 +16,7 @@ interface MusicContextType {
   fetchingArtAlbumIds: Set<string>;
   requestPermission: () => Promise<void>;
   refresh: () => Promise<void>;
+  fetchMissingArt: () => Promise<void>;
 }
 
 const MusicContext = createContext<MusicContextType | null>(null);
@@ -31,9 +32,6 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     }
   }, [library.loading, library.tracks.length]);
 
-  // Stabilise the context value — only re-create when primitive fields change.
-  // fetchingArtAlbumIds is a Set whose reference changes on every art batch
-  // completion, so we include it here deliberately (it drives loading indicators).
   const value = useMemo<MusicContextType>(
     () => ({
       tracks: library.tracks,
@@ -48,6 +46,7 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
       fetchingArtAlbumIds: library.fetchingArtAlbumIds,
       requestPermission: library.requestPermission,
       refresh: library.refresh,
+      fetchMissingArt: library.fetchMissingArt,
     }),
     [
       library.tracks,
@@ -62,6 +61,7 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
       library.fetchingArtAlbumIds,
       library.requestPermission,
       library.refresh,
+      library.fetchMissingArt,
     ]
   );
 

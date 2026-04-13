@@ -1,11 +1,12 @@
 /**
- * iTunes Search API integration for album art lookup.
+ * iTunes Search API integration for album art + release date lookup.
  *
  * Strategy:
  *  1. Fetch all albums for an artist via artistId lookup.
  *  2. Build a score matrix between local albums and iTunes collections.
  *  3. Greedily assign best matches above MIN_SCORE (one-to-one).
  *  4. Prefer 512px artwork, fall back to 100px.
+ *  5. Return releaseDate (ISO string) for matched albums.
  */
 
 import { normaliseForMatch, similarity } from "@/utils/stringUtils";
@@ -17,7 +18,13 @@ interface ItunesCollection {
   collectionName: string;
   artworkUrl100: string;
   artworkUrl512: string;
+  releaseDate: string | null; // ISO date string from iTunes
   _assigned: boolean;
+}
+
+export interface ArtResult {
+  artUrl: string | null;
+  releaseDate: string | null;
 }
 
 // ─── API calls ────────────────────────────────────────────────────────────────
@@ -47,6 +54,7 @@ async function fetchArtistCollections(
         artworkUrl100: r.artworkUrl100,
         artworkUrl512:
           r.artworkUrl100?.replace("100x100bb", "512x512bb") ?? r.artworkUrl100,
+        releaseDate: r.releaseDate ?? null,
         _assigned: false,
       }));
   } catch {
@@ -67,14 +75,14 @@ async function resolveArtUrl(
 // ─── Matching ─────────────────────────────────────────────────────────────────
 
 /**
- * Greedy best-first matching: returns a map of albumKey → art URL.
+ * Greedy best-first matching: returns a map of albumKey → ArtResult.
  * Each local album and each iTunes collection is assigned at most once.
  */
 async function matchAlbumsToCollections(
   albums: { aKey: string; title: string }[],
   collections: ItunesCollection[]
-): Promise<Map<string, string>> {
-  const result = new Map<string, string>();
+): Promise<Map<string, ArtResult>> {
+  const result = new Map<string, ArtResult>();
   if (albums.length === 0 || collections.length === 0) return result;
 
   const normAlbums = albums.map((a) => normaliseForMatch(a.title));
@@ -113,9 +121,10 @@ async function matchAlbumsToCollections(
     collection._assigned = true;
 
     const url = await resolveArtUrl(collection);
-    if (url) {
-      result.set(albums[match.albumIndex].aKey, url);
-    }
+    result.set(albums[match.albumIndex].aKey, {
+      artUrl: url,
+      releaseDate: collection.releaseDate,
+    });
   }
 
   return result;
@@ -125,12 +134,13 @@ async function matchAlbumsToCollections(
 
 /**
  * For a given artist, fetch iTunes collections and return a map of
- * albumKey → resolved art URL for every album that matched above MIN_SCORE.
+ * albumKey → ArtResult (art URL + release date) for every album that
+ * matched above MIN_SCORE.
  */
 export async function fetchArtForArtist(
   artistName: string,
   albums: { aKey: string; title: string }[]
-): Promise<Map<string, string>> {
+): Promise<Map<string, ArtResult>> {
   const collections = await fetchArtistCollections(artistName);
   return matchAlbumsToCollections(albums, collections);
 }

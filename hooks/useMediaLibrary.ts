@@ -29,17 +29,20 @@ import {
   loadArtCache,
 } from "@/utils/artCache";
 import { fetchArtForArtist } from "@/utils/itunesArt";
+import { fetchArtForArtistFromMB } from "@/utils/musicBrainzArt";
 import { readMetadata } from "@/utils/metadataReader";
 import { buildLibrary } from "@/utils/libraryBuilder";
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
-const CACHE_KEY = "library_cache_v15";
+const CACHE_KEY = "library_cache_v14";
 const CACHE_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 365;
+const ART_TTL_KEY = "art_fetch_last_run";
+const ART_TTL_MS = 1000 * 60 * 60 * 24; // 24 hours
 const CONCURRENCY = 4;
 
 /** When true, only scans /Download/Persisted/Music/ (Light Phone target path). */
-const LIGHT_PHONE_MODE = true;
+const LIGHT_PHONE_MODE = false;
 const LIGHT_PHONE_MUSIC_PATH = "/Download/Persisted/Music/";
 
 // Set to true to save embedded cover art extracted from file metadata.
@@ -120,6 +123,7 @@ export function useMediaLibrary() {
   const cacheRef = useRef<CachedLibrary | null>(null);
   const appState = useRef(AppState.currentState);
   const scanInProgress = useRef(false);
+  const firstScanRef = useRef(false);
 
   // ── Scan ────────────────────────────────────────────────────────────────────
   const silentScanRef = useRef(false);
@@ -128,7 +132,6 @@ export function useMediaLibrary() {
     async (
       silent = false,
       existingCache?: CachedLibrary | null,
-      skipArt = false
     ) => {
       // If a scan is already running, only block if this is also silent
       // A non-silent (user-facing) scan always takes priority
@@ -338,73 +341,6 @@ export function useMediaLibrary() {
           permissionGranted: true,
           fetchingArtAlbumIds: new Set(),
         });
-
-        // ── Phase 2: iTunes art ────────────────────────────────────────────
-        if (!skipArt) {
-          // Build per-artist list of albums missing art
-          const artistAlbums = new Map<string, { aKey: string; title: string }[]>();
-          const seen = new Set<string>();
-
-          for (const track of tracks) {
-            if (
-              artCache.get(track.albumId) ||
-              isUnknown(track.albumArtist) ||
-              isUnknown(track.album)
-            )
-              continue;
-            if (!seen.has(track.albumId)) {
-              seen.add(track.albumId);
-              if (!artistAlbums.has(track.albumArtist))
-                artistAlbums.set(track.albumArtist, []);
-              artistAlbums
-                .get(track.albumArtist)!
-                .push({ aKey: track.albumId, title: track.album });
-            }
-          }
-
-          if (artistAlbums.size > 0) {
-            const allMissingIds = new Set<string>();
-            for (const albumList of artistAlbums.values()) {
-              albumList.forEach((a) => allMissingIds.add(a.aKey));
-            }
-            setState((s) => ({ ...s, fetchingArtAlbumIds: allMissingIds }));
-
-            for (const [artistName, albumList] of artistAlbums) {
-              if (cancelled.current) break;
-
-              const artResults = await fetchArtForArtist(artistName, albumList);
-
-              for (const { aKey } of albumList) {
-                const url = artResults.get(aKey) ?? null;
-                if (url) {
-                  artCache.set(aKey, url);
-                  for (const track of tracks) {
-                    if (track.albumId === aKey) track.albumArt = url;
-                  }
-                }
-              }
-
-              const updatedSorted = [...tracks].sort((a, b) =>
-                a.title.localeCompare(b.title)
-              );
-              const { albums, artists } = buildLibrary(tracks);
-
-              setState((s) => {
-                const next = new Set(s.fetchingArtAlbumIds);
-                albumList.forEach(({ aKey }) => next.delete(aKey));
-                return {
-                  ...s,
-                  tracks: updatedSorted,
-                  albums,
-                  artists,
-                  fetchingArtAlbumIds: next,
-                };
-              });
-            }
-
-            await saveArtCache(tracks);
-          }
-        }
       } catch (e: any) {
         setState((s) => ({
           ...s,
@@ -417,6 +353,192 @@ export function useMediaLibrary() {
     },
     []
   );
+
+  // ── Fetch missing album art (Phase 2) — TTL gated, called from album view ──
+  const artFetchInProgress = useRef(false);
+
+  const fetchMissingArt = useCallback(async () => {
+    if (artFetchInProgress.current) return;
+
+    // Check TTL — only run once per 24 hours
+    try {
+      const lastRun = await AsyncStorage.getItem(ART_TTL_KEY);
+      if (lastRun && Date.now() - Number(lastRun) < ART_TTL_MS) return;
+    } catch {}
+
+    const tracks = [...state.tracks];
+    if (tracks.length === 0) return;
+
+    artFetchInProgress.current = true;
+
+    try {
+      const savedArtMap = await loadArtCache();
+      const artCache = new Map<string, string | null>(Object.entries(savedArtMap));
+
+      // Build per-artist list of albums missing art
+      const artistAlbums = new Map<string, { aKey: string; title: string }[]>();
+      const seen = new Set<string>();
+
+      for (const track of tracks) {
+        if (
+          artCache.get(track.albumId) ||
+          track.albumArt ||
+          isUnknown(track.albumArtist) ||
+          isUnknown(track.album)
+        )
+          continue;
+        if (!seen.has(track.albumId)) {
+          seen.add(track.albumId);
+          if (!artistAlbums.has(track.albumArtist))
+            artistAlbums.set(track.albumArtist, []);
+          artistAlbums
+            .get(track.albumArtist)!
+            .push({ aKey: track.albumId, title: track.album });
+        }
+      }
+
+      if (artistAlbums.size === 0) {
+        // Nothing to fetch — still mark as run so we don't check again today
+        await AsyncStorage.setItem(ART_TTL_KEY, String(Date.now()));
+        artFetchInProgress.current = false;
+        return;
+      }
+
+      const allMissingIds = new Set<string>();
+      for (const albumList of artistAlbums.values()) {
+        albumList.forEach((a) => allMissingIds.add(a.aKey));
+      }
+      setState((s) => ({ ...s, fetchingArtAlbumIds: allMissingIds }));
+
+      for (const [artistName, albumList] of artistAlbums) {
+        if (cancelled.current) break;
+
+        const artResults = await fetchArtForArtist(artistName, albumList);
+
+        for (const { aKey } of albumList) {
+          const result = artResults.get(aKey);
+          if (result) {
+            if (result.artUrl) {
+              artCache.set(aKey, result.artUrl);
+              for (const track of tracks) {
+                if (track.albumId === aKey) track.albumArt = result.artUrl;
+              }
+            }
+            // Update releaseDate — iTunes is more precise than file tags
+            // (file tags often just have "2013", iTunes has "2013-12-06T08:00:00Z")
+            if (result.releaseDate) {
+              for (const track of tracks) {
+                if (track.albumId !== aKey) continue;
+                const existing = track.releaseDate;
+                // Use iTunes date if: no existing date, or existing is less precise
+                if (!existing || existing.length < result.releaseDate.length) {
+                  track.releaseDate = result.releaseDate;
+                }
+              }
+            }
+          }
+        }
+
+        const updatedSorted = [...tracks].sort((a, b) =>
+          a.title.localeCompare(b.title)
+        );
+        const { albums, artists } = buildLibrary(tracks);
+
+        setState((s) => {
+          const next = new Set(s.fetchingArtAlbumIds);
+          albumList.forEach(({ aKey }) => next.delete(aKey));
+          return {
+            ...s,
+            tracks: updatedSorted,
+            albums,
+            artists,
+            fetchingArtAlbumIds: next,
+          };
+        });
+      }
+
+      await saveArtCache(tracks);
+
+      // ── MusicBrainz fallback for albums still missing art ──────────────
+      const mbArtistAlbums = new Map<string, { aKey: string; title: string }[]>();
+      const mbSeen = new Set<string>();
+
+      for (const track of tracks) {
+        if (
+          track.albumArt ||
+          isUnknown(track.albumArtist) ||
+          isUnknown(track.album)
+        )
+          continue;
+        if (!mbSeen.has(track.albumId)) {
+          mbSeen.add(track.albumId);
+          if (!mbArtistAlbums.has(track.albumArtist))
+            mbArtistAlbums.set(track.albumArtist, []);
+          mbArtistAlbums
+            .get(track.albumArtist)!
+            .push({ aKey: track.albumId, title: track.album });
+        }
+      }
+
+      if (mbArtistAlbums.size > 0) {
+        const mbMissingIds = new Set<string>();
+        for (const albumList of mbArtistAlbums.values()) {
+          albumList.forEach((a) => mbMissingIds.add(a.aKey));
+        }
+        setState((s) => ({ ...s, fetchingArtAlbumIds: mbMissingIds }));
+
+        for (const [artistName, albumList] of mbArtistAlbums) {
+          if (cancelled.current) break;
+
+          const mbResults = await fetchArtForArtistFromMB(artistName, albumList);
+
+          for (const { aKey } of albumList) {
+            const result = mbResults.get(aKey);
+            if (result) {
+              if (result.artUrl) {
+                artCache.set(aKey, result.artUrl);
+                for (const track of tracks) {
+                  if (track.albumId === aKey) track.albumArt = result.artUrl;
+                }
+              }
+              if (result.releaseDate) {
+                for (const track of tracks) {
+                  if (track.albumId !== aKey) continue;
+                  const existing = track.releaseDate;
+                  if (!existing || existing.length < result.releaseDate.length) {
+                    track.releaseDate = result.releaseDate;
+                  }
+                }
+              }
+            }
+          }
+
+          const updatedSorted = [...tracks].sort((a, b) =>
+            a.title.localeCompare(b.title)
+          );
+          const { albums, artists } = buildLibrary(tracks);
+
+          setState((s) => {
+            const next = new Set(s.fetchingArtAlbumIds);
+            albumList.forEach(({ aKey }) => next.delete(aKey));
+            return {
+              ...s,
+              tracks: updatedSorted,
+              albums,
+              artists,
+              fetchingArtAlbumIds: next,
+            };
+          });
+        }
+
+        await saveArtCache(tracks);
+      }
+
+      await AsyncStorage.setItem(ART_TTL_KEY, String(Date.now()));
+    } catch {} finally {
+      artFetchInProgress.current = false;
+    }
+  }, [state.tracks]);
 
   // ── Permission request ───────────────────────────────────────────────────
   const requestPermission = useCallback(async () => {
@@ -461,7 +583,7 @@ export function useMediaLibrary() {
         });
 
         // Background rescan after cache display — skip art refetch on resume
-        setTimeout(() => scan(true, cache, true), 2000);
+        setTimeout(() => scan(true, cache), 2000);
       } else {
         // No cache — show scan view immediately, then start scanning
         setState((s) => ({
@@ -471,7 +593,9 @@ export function useMediaLibrary() {
           loading: true,
           scanProgress: 0,
         }));
-        await scan(false, null, false);
+        await scan(false, null);
+        // First-ever scan — fetch album art immediately (bypasses TTL)
+        firstScanRef.current = true;
       }
     })();
 
@@ -481,7 +605,7 @@ export function useMediaLibrary() {
         appState.current.match(/inactive|background/) &&
         nextState === "active"
       ) {
-        scan(true, cacheRef.current, true);
+        scan(true, cacheRef.current);
       }
       appState.current = nextState;
     });
@@ -492,9 +616,18 @@ export function useMediaLibrary() {
     };
   }, []);
 
+  // After the first-ever scan completes and tracks are loaded, fetch art immediately
+  useEffect(() => {
+    if (firstScanRef.current && !state.loading && state.tracks.length > 0) {
+      firstScanRef.current = false;
+      fetchMissingArt();
+    }
+  }, [state.loading, state.tracks.length]);
+
   return {
     ...state,
     requestPermission,
     refresh: () => scan(false, null),
+    fetchMissingArt,
   };
 }
