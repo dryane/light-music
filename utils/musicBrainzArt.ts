@@ -80,12 +80,15 @@ async function fetchCoverArtUrl(mbid: string): Promise<string | null> {
     const front = images.find((img: any) => img.front) ?? images[0];
     if (!front) return null;
 
-    return front.thumbnails?.["500"] ??
+    const url = front.thumbnails?.["500"] ??
       front.thumbnails?.large ??
       front.thumbnails?.["250"] ??
       front.thumbnails?.small ??
       front.image ??
       null;
+
+    // Cover Art Archive sometimes returns http:// URLs — force HTTPS
+    return url?.replace(/^http:\/\//, "https://") ?? null;
   } catch {
     return null;
   }

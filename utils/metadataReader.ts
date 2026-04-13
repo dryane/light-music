@@ -107,12 +107,27 @@ export async function readMetadata(
     // Large files are more likely to have big embedded art — skip small chunks
     const chunks = fileSize >= LARGE_FILE_THRESHOLD ? CHUNK_LARGE : CHUNK_SMALL;
 
-    // Try progressive partial reads
+    // Progressive partial reads — each step reads only the new bytes
+    // and concatenates with what we already have
+    let buffer = new Uint8Array(0);
+    let bytesRead = 0;
+
     for (const chunkSize of chunks) {
       if (chunkSize >= fileSize) break;
 
-      const base64 = await RNFS.read(path, chunkSize, 0, "base64");
-      const buffer = base64ToBuffer(base64);
+      const additionalBytes = chunkSize - bytesRead;
+      if (additionalBytes <= 0) continue;
+
+      const base64 = await RNFS.read(path, additionalBytes, bytesRead, "base64");
+      const newBytes = base64ToBuffer(base64);
+
+      // Concatenate with existing buffer
+      const combined = new Uint8Array(bytesRead + newBytes.length);
+      combined.set(buffer, 0);
+      combined.set(newBytes, bytesRead);
+      buffer = combined;
+      bytesRead = buffer.length;
+
       common = await tryParse(buffer, mimeType, fileSize);
       if (common) {
         resolvedAt = `${chunkSize / 1024}KB`;
@@ -120,10 +135,19 @@ export async function readMetadata(
       }
     }
 
-    // If partial reads didn't work, read the full file
+    // If partial reads didn't work, read the remaining bytes and try full
     if (!common) {
-      const base64 = await RNFS.readFile(path, "base64");
-      const buffer = base64ToBuffer(base64);
+      if (bytesRead > 0 && bytesRead < fileSize) {
+        const base64 = await RNFS.read(path, fileSize - bytesRead, bytesRead, "base64");
+        const remaining = base64ToBuffer(base64);
+        const full = new Uint8Array(bytesRead + remaining.length);
+        full.set(buffer, 0);
+        full.set(remaining, bytesRead);
+        buffer = full;
+      } else {
+        const base64 = await RNFS.readFile(path, "base64");
+        buffer = base64ToBuffer(base64);
+      }
       common = await tryParse(buffer, mimeType, fileSize);
     }
 

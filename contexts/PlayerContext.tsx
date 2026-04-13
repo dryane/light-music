@@ -133,7 +133,11 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     const track = trackMapRef.current.get(activeTrack.id);
-    if (track) setCurrentTrack(track);
+    if (track) {
+      console.log(`[PLAYER] Now playing: "${track.title}" by ${track.artist}`);
+      console.log(`[PLAYER]   album: "${track.album}" | albumArt: ${track.albumArt ? track.albumArt.substring(0, 80) + "..." : "null"}`);
+      setCurrentTrack(track);
+    }
   }, [activeTrack?.id]);
 
   // Update Bluetooth/lock screen artwork when track changes

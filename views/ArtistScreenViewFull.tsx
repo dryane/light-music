@@ -79,6 +79,9 @@ export function ArtistScreenViewFull({
               {albums.length > 0
                 ? `${albums.length} ${albums.length === 1 ? "album" : "albums"} · `
                 : ""}
+              {singleTracks.length > 0
+                ? `${singleTracks.length} ${singleTracks.length === 1 ? "single" : "singles"} · `
+                : ""}
               {allTracks.length} songs
             </StyledText>
           </View>
