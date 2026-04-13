@@ -39,7 +39,11 @@ export function MiniPlayer() {
   useEffect(() => {
     if (activeTrack) {
       lastTrackRef.current = activeTrack;
-      dismissingRef.current = false;
+      // Cancel any in-progress slide-down animation
+      if (dismissingRef.current) {
+        slideAnim.stopAnimation();
+        dismissingRef.current = false;
+      }
       setVisible(true);
       if (!hasAnimated.current) {
         hasAnimated.current = true;
@@ -50,6 +54,9 @@ export function MiniPlayer() {
           tension: 100,
           friction: 14,
         }).start();
+      } else {
+        // Already animated in before — make sure it's at the visible position
+        slideAnim.setValue(0);
       }
     } else if (visible && !dismissingRef.current) {
       // Track went away — slide down then hide
@@ -59,9 +66,12 @@ export function MiniPlayer() {
         toValue: 80,
         duration: 250,
         useNativeDriver: true,
-      }).start(() => {
-        setVisible(false);
-        dismissingRef.current = false;
+      }).start(({ finished }) => {
+        // Only hide if the animation wasn't cancelled by a new track arriving
+        if (finished) {
+          setVisible(false);
+          dismissingRef.current = false;
+        }
       });
     }
   }, [!!activeTrack]);
