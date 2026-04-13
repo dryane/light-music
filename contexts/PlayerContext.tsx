@@ -59,8 +59,8 @@ function toRNTPTrack(track: Track) {
 
 let playerSetup = false;
 
-async function setupPlayer() {
-  if (playerSetup) return;
+async function setupPlayer(): Promise<boolean> {
+  if (playerSetup) return true;
   try {
     await TrackPlayer.setupPlayer({
       minBuffer: 5,
@@ -96,8 +96,17 @@ async function setupPlayer() {
     });
     await TrackPlayer.setRepeatMode(RepeatMode.Off);
     playerSetup = true;
+    return true;
   } catch {
-    playerSetup = true;
+    // Setup failed — might already be initialized (hot reload)
+    // Try a simple operation to check if player is actually working
+    try {
+      await TrackPlayer.getPlaybackState();
+      playerSetup = true;
+      return true;
+    } catch {
+      return false;
+    }
   }
 }
 
@@ -114,24 +123,28 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const trackMapRef = useRef<Map<string, Track>>(new Map());
   const queueRef = useRef<Track[]>([]);
   const saveStateRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isChangingTrackRef = useRef(false);
 
   queueRef.current = queue;
 
   const isPlaying = playbackState.state === State.Playing;
 
   useEffect(() => {
-    setupPlayer().then(() => setReady(true));
+    setupPlayer().then((success) => {
+      if (success) setReady(true);
+    });
   }, []);
 
   useEffect(() => {
     if (!activeTrack?.id) {
       setCurrentTrack(null);
-      // Queue ended or player reset — dismiss now playing if it's open
-      if (segments.includes("nowplaying" as never)) {
+      // Only dismiss if this is a real stop, not a track change in progress
+      if (!isChangingTrackRef.current && segments.includes("nowplaying" as never)) {
         router.back();
       }
       return;
     }
+    isChangingTrackRef.current = false;
     const track = trackMapRef.current.get(activeTrack.id);
     if (track) {
       console.log(`[PLAYER] Now playing: "${track.title}" by ${track.artist}`);
@@ -237,12 +250,27 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       trackMapRef.current.set(track.id, track);
     }
 
+    // Set the current track immediately so the UI shows the right track
+    setCurrentTrack(track);
+
+    isChangingTrackRef.current = true;
     pushNowPlayingAnimated();
 
+    // Add just the selected track and start playing immediately
     await TrackPlayer.reset();
-    await TrackPlayer.add(effectiveQueue.map(toRNTPTrack));
-    await TrackPlayer.skip(startIndex);
+    await TrackPlayer.add(toRNTPTrack(track));
     await TrackPlayer.play();
+
+    // Now add the rest of the queue in the background
+    const before = effectiveQueue.slice(0, startIndex).map(toRNTPTrack);
+    const after = effectiveQueue.slice(startIndex + 1).map(toRNTPTrack);
+
+    if (after.length > 0) {
+      await TrackPlayer.add(after);
+    }
+    if (before.length > 0) {
+      await TrackPlayer.add(before, 0);
+    }
 
     persistState(track.id, 0, effectiveQueue);
   }, [ready, persistState]);
