@@ -5,6 +5,7 @@ import { useMusic } from "@/contexts/MusicContext";
 import { usePlayer } from "@/contexts/PlayerContext";
 import { useSwipeBack } from "@/hooks/useSwipeBack";
 import { useTheme } from "@/hooks/useTheme";
+import { shuffle } from "@/utils/async";
 import { Album, Track } from "@/types/music";
 import { ArtistScreenViewFull } from "@/views/ArtistScreenViewFull";
 import { ArtistScreenViewLight } from "@/views/ArtistScreenViewLight";
@@ -31,8 +32,8 @@ export default function ArtistScreen() {
   const allTracks = artist?.albums.flatMap((a) => a.tracks) ?? [];
 
   const playAll = () => allTracks.length > 0 && playTrack(allTracks[0], allTracks);
-  const shuffle = () => {
-    const s = [...allTracks].sort(() => Math.random() - 0.5);
+  const shuffleAll = () => {
+    const s = shuffle(allTracks);
     if (s.length > 0) playTrack(s[0], s);
   };
 
@@ -46,7 +47,7 @@ export default function ArtistScreen() {
     panHandlers,
     translateX,
     onPlayAll: playAll,
-    onShuffle: shuffle,
+    onShuffle: shuffleAll,
     onNavigateToAlbum: (albumId: string) =>
       router.push({ pathname: "/album/[albumId]", params: { albumId } }),
     onPlaySingle: (track: Track) => playTrack(track, singleTracks),

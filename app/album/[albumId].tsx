@@ -5,6 +5,7 @@ import { useMusic } from "@/contexts/MusicContext";
 import { usePlayer } from "@/contexts/PlayerContext";
 import { useSwipeBack } from "@/hooks/useSwipeBack";
 import { useTheme } from "@/hooks/useTheme";
+import { shuffle } from "@/utils/async";
 import { AlbumScreenViewFull } from "@/views/AlbumScreenViewFull";
 import { AlbumScreenViewLight } from "@/views/AlbumScreenViewLight";
 
@@ -27,7 +28,7 @@ export default function AlbumScreen() {
 
   const playAlbum = () => tracks.length > 0 && playTrack(tracks[0], tracks);
   const shuffleAlbum = () => {
-    const s = [...tracks].sort(() => Math.random() - 0.5);
+    const s = shuffle(tracks);
     if (s.length > 0) playTrack(s[0], s);
   };
 

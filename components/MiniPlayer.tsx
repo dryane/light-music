@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Animated } from "react-native";
+import { Animated, View, StyleSheet } from "react-native";
 import { router, useSegments } from "expo-router";
 import {
   useActiveTrack,
@@ -35,9 +35,24 @@ export function MiniPlayer() {
   const lastTrackRef = useRef(activeTrack);
   const [visible, setVisible] = useState(false);
   const dismissingRef = useRef(false);
+  const stoppingRef = useRef(false);
 
   useEffect(() => {
     if (activeTrack) {
+      // Skip snapshot updates during stop — RNTP cycles through intermediate tracks
+      // But if we stopped and a new track started without going null, clear the flag
+      if (stoppingRef.current) {
+        // Check if this is a genuinely new track (user started playback again)
+        // vs an intermediate RNTP cycle during reset
+        if (dismissingRef.current || !visible) {
+          // Dismiss finished or in progress — this is a new playback session
+          stoppingRef.current = false;
+          dismissingRef.current = false;
+          slideAnim.stopAnimation();
+        } else {
+          return;
+        }
+      }
       lastTrackRef.current = activeTrack;
       // Cancel any in-progress slide-down animation
       if (dismissingRef.current) {
@@ -60,6 +75,7 @@ export function MiniPlayer() {
       }
     } else if (visible && !dismissingRef.current) {
       // Track went away — slide down then hide
+      stoppingRef.current = false;
       dismissingRef.current = true;
       hasAnimated.current = false;
       Animated.timing(slideAnim, {
@@ -74,7 +90,7 @@ export function MiniPlayer() {
         }
       });
     }
-  }, [!!activeTrack]);
+  }, [activeTrack?.id]);
 
   const displayTrack = activeTrack ?? lastTrackRef.current;
 
@@ -87,7 +103,25 @@ export function MiniPlayer() {
     slideAnim,
     theme,
     onNavigate: () => router.push("/nowplaying"),
-    onStop: () => stop(),
+    onStop: () => {
+      stoppingRef.current = true;
+      // Begin dismiss immediately — don't wait for RNTP to cycle through tracks
+      if (!dismissingRef.current) {
+        dismissingRef.current = true;
+        hasAnimated.current = false;
+        Animated.timing(slideAnim, {
+          toValue: 80,
+          duration: 250,
+          useNativeDriver: true,
+        }).start(({ finished }) => {
+          if (finished) {
+            setVisible(false);
+            dismissingRef.current = false;
+          }
+        });
+      }
+      stop();
+    },
     onTogglePlay: () => {
       triggerHaptic();
       togglePlayPause();
@@ -99,7 +133,18 @@ export function MiniPlayer() {
     hasArtwork: !!displayTrack.artwork,
   };
 
-  return theme.variant === "light"
+  const view = theme.variant === "light"
     ? <MiniPlayerLight {...props} />
     : <MiniPlayerFull {...props} />;
+
+  return <View style={styles.overlay}>{view}</View>;
 }
+
+const styles = StyleSheet.create({
+  overlay: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+  },
+});

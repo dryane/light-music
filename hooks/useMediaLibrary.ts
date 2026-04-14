@@ -366,7 +366,7 @@ export function useMediaLibrary() {
       if (lastRun && Date.now() - Number(lastRun) < ART_TTL_MS) return;
     } catch {}
 
-    const tracks = [...state.tracks];
+    let tracks = [...state.tracks];
     if (tracks.length === 0) return;
 
     artFetchInProgress.current = true;
@@ -418,26 +418,27 @@ export function useMediaLibrary() {
         for (const { aKey } of albumList) {
           const result = artResults.get(aKey);
           if (result) {
-            if (result.artUrl) {
-              artCache.set(aKey, result.artUrl);
-              for (const track of tracks) {
-                if (track.albumId === aKey) track.albumArt = result.artUrl;
-              }
-            }
-            // Update releaseDate — iTunes is more precise than file tags
-            // (file tags often just have "2013", iTunes has "2013-12-06T08:00:00Z")
-            if (result.releaseDate) {
-              for (const track of tracks) {
-                if (track.albumId !== aKey) continue;
-                const existing = track.releaseDate;
-                // Use iTunes date if: no existing date, or existing is less precise
-                if (!existing || existing.length < result.releaseDate.length) {
-                  track.releaseDate = result.releaseDate;
-                }
-              }
-            }
+            if (result.artUrl) artCache.set(aKey, result.artUrl);
           }
         }
+
+        // Produce new track refs for any tracks updated by this artist batch
+        tracks = tracks.map((track) => {
+          const result = artResults.get(track.albumId);
+          if (!result) return track;
+          let changed = false;
+          let albumArt = track.albumArt;
+          let releaseDate = track.releaseDate;
+          if (result.artUrl) {
+            albumArt = result.artUrl;
+            changed = true;
+          }
+          if (result.releaseDate && (!releaseDate || releaseDate.length < result.releaseDate.length)) {
+            releaseDate = result.releaseDate;
+            changed = true;
+          }
+          return changed ? { ...track, albumArt, releaseDate } : track;
+        });
 
         const updatedSorted = [...tracks].sort((a, b) =>
           a.title.localeCompare(b.title)
@@ -495,23 +496,27 @@ export function useMediaLibrary() {
           for (const { aKey } of albumList) {
             const result = mbResults.get(aKey);
             if (result) {
-              if (result.artUrl) {
-                artCache.set(aKey, result.artUrl);
-                for (const track of tracks) {
-                  if (track.albumId === aKey) track.albumArt = result.artUrl;
-                }
-              }
-              if (result.releaseDate) {
-                for (const track of tracks) {
-                  if (track.albumId !== aKey) continue;
-                  const existing = track.releaseDate;
-                  if (!existing || existing.length < result.releaseDate.length) {
-                    track.releaseDate = result.releaseDate;
-                  }
-                }
-              }
+              if (result.artUrl) artCache.set(aKey, result.artUrl);
             }
           }
+
+          // Produce new track refs for any tracks updated by this MB batch
+          tracks = tracks.map((track) => {
+            const result = mbResults.get(track.albumId);
+            if (!result) return track;
+            let changed = false;
+            let albumArt = track.albumArt;
+            let releaseDate = track.releaseDate;
+            if (result.artUrl) {
+              albumArt = result.artUrl;
+              changed = true;
+            }
+            if (result.releaseDate && (!releaseDate || releaseDate.length < result.releaseDate.length)) {
+              releaseDate = result.releaseDate;
+              changed = true;
+            }
+            return changed ? { ...track, albumArt, releaseDate } : track;
+          });
 
           const updatedSorted = [...tracks].sort((a, b) =>
             a.title.localeCompare(b.title)

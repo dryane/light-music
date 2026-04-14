@@ -36,7 +36,12 @@ export function useSwipeBack() {
         isFocusedRef.current &&
         g.dx > 2 &&
         Math.abs(g.dx) > Math.abs(g.dy),
-      onMoveShouldSetPanResponderCapture: () => false,
+      // Capture horizontal swipes before the FlatList's ScrollView claims them
+      onMoveShouldSetPanResponderCapture: (_, g) =>
+        !globalDismissing &&
+        isFocusedRef.current &&
+        g.dx > 10 &&
+        Math.abs(g.dx) > Math.abs(g.dy) * 1.5,
 
       onPanResponderMove: (_, g) => {
         if (g.dx > 0) translateX.setValue(g.dx);
@@ -47,7 +52,16 @@ onPanResponderRelease: (_, g) => {
   if (g.dx > DISMISS_THRESHOLD || g.vx > DISMISS_VELOCITY) {
     globalDismissing = true;
     setTimeout(() => { globalDismissing = false; }, 1000);
-    router.back();
+    // Animate off-screen with momentum from the swipe gesture
+    Animated.spring(translateX, {
+      toValue: SCREEN_W,
+      velocity: g.vx,
+      useNativeDriver: true,
+      tension: 100,
+      friction: 14,
+    }).start(() => {
+      router.back();
+    });
   } else {
     Animated.spring(translateX, {
       toValue: 0,

@@ -31,8 +31,23 @@ export default function NowPlayingScreen() {
   const activeTrack = useActiveTrack();
   const playbackState = usePlaybackState();
   const progress = useProgress(500);
-  const isPlaying = playbackState.state === State.Playing;
   const { position, duration } = progress;
+
+  // Optimistic isPlaying — stays true during skip transitions to avoid button flicker
+  const wasPlayingRef = useRef(false);
+  const isPlaying = (() => {
+    const s = playbackState.state;
+    if (s === State.Playing) {
+      wasPlayingRef.current = true;
+      return true;
+    }
+    if (s === State.Paused || s === State.Stopped || s === State.None || s === State.Error) {
+      wasPlayingRef.current = false;
+      return false;
+    }
+    // Buffering/Loading/Ready — hold previous intent
+    return wasPlayingRef.current;
+  })();
 
   // Keep a snapshot so the UI doesn't blank out during the dismiss animation
   const lastTrackRef = useRef(activeTrack);

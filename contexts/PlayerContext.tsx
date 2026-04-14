@@ -124,8 +124,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const queueRef = useRef<Track[]>([]);
   const saveStateRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isChangingTrackRef = useRef(false);
+  const segmentsRef = useRef(segments);
 
   queueRef.current = queue;
+  segmentsRef.current = segments;
 
   const isPlaying = playbackState.state === State.Playing;
 
@@ -139,7 +141,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     if (!activeTrack?.id) {
       setCurrentTrack(null);
       // Only dismiss if this is a real stop, not a track change in progress
-      if (!isChangingTrackRef.current && segments.includes("nowplaying" as never)) {
+      if (!isChangingTrackRef.current && segmentsRef.current.includes("nowplaying" as never)) {
+        console.log(`[PLAYER] Track gone, dismissing nowplaying`);
         router.back();
       }
       return;
@@ -238,6 +241,9 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const playTrack = useCallback(async (track: Track, newQueue?: Track[]) => {
     if (!ready) return;
 
+    // If user manually starts playback, skip any pending restore
+    if (!restored) setRestored(true);
+
     const effectiveQueue = newQueue ?? queueRef.current;
     const trackIndex = effectiveQueue.findIndex((t) => t.id === track.id);
     const startIndex = trackIndex >= 0 ? trackIndex : 0;
@@ -256,24 +262,39 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     isChangingTrackRef.current = true;
     pushNowPlayingAnimated();
 
-    // Add just the selected track and start playing immediately
-    await TrackPlayer.reset();
-    await TrackPlayer.add(toRNTPTrack(track));
-    await TrackPlayer.play();
+    // ── Critical path: reset → add selected track → play ──────────────
+    try {
+      await TrackPlayer.reset();
+      await TrackPlayer.add(toRNTPTrack(track));
+      await TrackPlayer.play();
+      console.log(`[PLAYER] playTrack OK: "${track.title}" by ${track.artist}`);
+    } catch (e) {
+      console.log(`[PLAYER] playTrack FAILED for "${track.title}": ${e}`);
+      // Player is in an unknown state — reset to clean slate
+      isChangingTrackRef.current = false;
+      setCurrentTrack(null);
+      try { await TrackPlayer.reset(); } catch {}
+      return;
+    }
 
-    // Now add the rest of the queue in the background
+    // ── Background: enqueue remaining tracks ──────────────────────────
     const before = effectiveQueue.slice(0, startIndex).map(toRNTPTrack);
     const after = effectiveQueue.slice(startIndex + 1).map(toRNTPTrack);
 
-    if (after.length > 0) {
-      await TrackPlayer.add(after);
-    }
-    if (before.length > 0) {
-      await TrackPlayer.add(before, 0);
+    try {
+      if (after.length > 0) {
+        await TrackPlayer.add(after);
+      }
+      if (before.length > 0) {
+        await TrackPlayer.add(before, 0);
+      }
+      console.log(`[PLAYER] Queue loaded: ${effectiveQueue.length} tracks (index ${startIndex})`);
+    } catch (e) {
+      console.log(`[PLAYER] Queue load partial failure: ${e}`);
     }
 
     persistState(track.id, 0, effectiveQueue);
-  }, [ready, persistState]);
+  }, [ready, restored, persistState]);
 
   const restoreFromLibrary = useCallback(async (allTracks: Track[]) => {
     if (restored || !ready) return;
@@ -305,7 +326,28 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       await TrackPlayer.skip(Math.max(0, trackIndex));
 
       if (saved.positionMs > 0) {
-        setTimeout(() => TrackPlayer.seekTo(saved.positionMs / 1000), 400);
+        const targetSecs = saved.positionMs / 1000;
+        const maxWait = 3000;
+        const interval = 100;
+        let waited = 0;
+        const poll = setInterval(async () => {
+          waited += interval;
+          try {
+            const { state } = await TrackPlayer.getPlaybackState();
+            if (state === State.Ready || state === State.Paused || state === State.Playing) {
+              clearInterval(poll);
+              await TrackPlayer.seekTo(targetSecs);
+              console.log(`[PLAYER] Restore seeked to ${targetSecs.toFixed(1)}s after ${waited}ms`);
+            } else if (waited >= maxWait) {
+              clearInterval(poll);
+              await TrackPlayer.seekTo(targetSecs);
+              console.log(`[PLAYER] Restore seek forced at ${maxWait}ms timeout (state: ${state})`);
+            }
+          } catch {
+            clearInterval(poll);
+            console.log(`[PLAYER] Restore seek failed after ${waited}ms`);
+          }
+        }, interval);
       }
     } catch {}
   }, [restored, ready]);

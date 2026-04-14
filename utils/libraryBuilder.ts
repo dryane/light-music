@@ -78,9 +78,11 @@ export function buildLibrary(tracks: Track[]): {
       return a.title.localeCompare(b.title);
     });
 
-    // Propagate album art to all tracks in the album
+    // Propagate album art to all tracks in the album (new refs, no mutation)
     if (alb.albumArt) {
-      for (const t of alb.tracks) t.albumArt = alb.albumArt;
+      alb.tracks = alb.tracks.map((t) =>
+        t.albumArt === alb.albumArt ? t : { ...t, albumArt: alb.albumArt }
+      );
     }
   }
 
