@@ -41,12 +41,16 @@ export function useSwipeBack() {
         g.dx > 2 &&
         Math.abs(g.dx) > Math.abs(g.dy),
       // Capture horizontal swipes before the FlatList's ScrollView claims them
-      onMoveShouldSetPanResponderCapture: (_, g) =>
-        !globalDismissing &&
-        !dismissedRef.current &&
-        isFocusedRef.current &&
-        g.dx > 10 &&
-        Math.abs(g.dx) > Math.abs(g.dy) * 1.5,
+      onMoveShouldSetPanResponderCapture: (e, g) => {
+        if (globalDismissing || dismissedRef.current || !isFocusedRef.current) return false;
+        const fromLeftEdge = e.nativeEvent.pageX - g.dx < SCREEN_W * 0.75;
+        if (fromLeftEdge) {
+          // 3/4 of screen (left of screen to right) — capture easily, user almost certainly wants to go back
+          return g.dx > 6 && g.dx > Math.abs(g.dy);
+        }
+        // Elsewhere on screen — stricter threshold to avoid stealing scroll
+        return g.dx > 10 && Math.abs(g.dx) > Math.abs(g.dy) * 1.5;
+      },
 
       onPanResponderMove: (_, g) => {
         if (g.dx > 0) translateX.setValue(g.dx);
