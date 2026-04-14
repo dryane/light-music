@@ -1,14 +1,38 @@
-import { useRef, useEffect, useState } from "react";
+import { useRef, useEffect, useState, useLayoutEffect } from "react";
 import { PanResponder, Animated, Dimensions } from "react-native";
 import { router } from "expo-router";
 import { useIsFocused } from "@react-navigation/native";
 
 const SCREEN_W = Dimensions.get("window").width;
-const DISMISS_THRESHOLD = SCREEN_W * 0.20;
-const DISMISS_VELOCITY = 0.3;
+
+// Tuned to feel closer to iOS
+
+// How close to the left edge a touch must start to even consider swipe-back.
+// Smaller = stricter (more like iOS), larger = easier to trigger anywhere.
+const EDGE_ZONE = SCREEN_W * 0.3; // percentage
+
+// How much vertical movement is allowed before we reject the gesture.
+// Lower = must be more horizontal (strict swipe-back only)
+// Higher = allows more diagonal swipes
+// ~0.7 ≈ allows ~55° diagonal swipes
+const ANGLE_RATIO = 0.7;
+
+// Minimum horizontal movement before we even start treating it as a swipe.
+// Prevents accidental triggers from tiny finger jitter.
+const ACTIVATE_DX = 5; // pixels
+
+// How far you must drag the screen before it "commits" to going back.
+// Expressed as % of screen width.
+// Lower = easier to trigger back
+// Higher = requires more deliberate swipe
+const DISMISS_THRESHOLD = SCREEN_W * 0.2;
+
+// How fast a swipe must be to trigger "go back" even if distance is small.
+// Higher = requires faster flicks
+// Lower = more forgiving / easier flick-to-go-back
+const DISMISS_VELOCITY = 0.5;
 
 // Module-level — shared across all instances
-// Prevents underlying screens from triggering their own dismiss
 export let globalDismissing = false;
 export function setGlobalDismissing(val: boolean) {
   globalDismissing = val;
@@ -19,66 +43,94 @@ export function useSwipeBack() {
   const isFocused = useIsFocused();
   const isFocusedRef = useRef(isFocused);
   const dismissedRef = useRef(false);
+  const startXRef = useRef(0);
+
   const [pointerEvents, setPointerEvents] = useState<"auto" | "none">("auto");
 
-  useEffect(() => {
-    isFocusedRef.current = isFocused;
-    if (isFocused) {
-      translateX.setValue(0);
-      dismissedRef.current = false;
-      setPointerEvents("auto");
-    }
-  }, [isFocused]);
+    useLayoutEffect(() => {
+      isFocusedRef.current = isFocused;
+
+      if (isFocused) {
+        // 👇 this is the key fix
+        translateX.stopAnimation(() => {
+          translateX.setValue(0);
+        });
+
+        dismissedRef.current = false;
+        setPointerEvents("auto");
+      }
+    }, [isFocused]);
 
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => false,
-      onStartShouldSetPanResponderCapture: () => false,
+      onStartShouldSetPanResponderCapture: (e) => {
+        startXRef.current = e.nativeEvent.pageX;
+        return false;
+      },
+
       onMoveShouldSetPanResponder: (_, g) =>
         !globalDismissing &&
         !dismissedRef.current &&
         isFocusedRef.current &&
-        g.dx > 2 &&
-        Math.abs(g.dx) > Math.abs(g.dy),
-      // Capture horizontal swipes before the FlatList's ScrollView claims them
-      onMoveShouldSetPanResponderCapture: (e, g) => {
+        g.dx > ACTIVATE_DX &&
+        Math.abs(g.dx) > Math.abs(g.dy) * ANGLE_RATIO,
+
+      onMoveShouldSetPanResponderCapture: (_, g) => {
         if (globalDismissing || dismissedRef.current || !isFocusedRef.current) return false;
-        const fromLeftEdge = e.nativeEvent.pageX - g.dx < SCREEN_W * 0.75;
-        if (fromLeftEdge) {
-          // 3/4 of screen (left of screen to right) — capture easily, user almost certainly wants to go back
-          return g.dx > 6 && g.dx > Math.abs(g.dy);
-        }
-        // Elsewhere on screen — stricter threshold to avoid stealing scroll
-        return g.dx > 10 && Math.abs(g.dx) > Math.abs(g.dy) * 1.5;
+
+        const fromEdge = startXRef.current < EDGE_ZONE;
+        if (!fromEdge) return false;
+
+        return (
+          g.dx > ACTIVATE_DX &&
+          g.dx > 0 &&
+          Math.abs(g.dx) > Math.abs(g.dy) * ANGLE_RATIO
+        );
       },
 
       onPanResponderMove: (_, g) => {
-        if (g.dx > 0) translateX.setValue(g.dx);
+        if (g.dx <= 0) return;
+
+        // iOS-like resistance past threshold
+        let dx = g.dx;
+        if (dx > DISMISS_THRESHOLD) {
+          const extra = dx - DISMISS_THRESHOLD;
+          dx = DISMISS_THRESHOLD + extra * 0.3;
+        }
+
+        translateX.setValue(dx);
       },
 
       onPanResponderRelease: (_, g) => {
         if (globalDismissing || dismissedRef.current) return;
-        if (g.dx > DISMISS_THRESHOLD || g.vx > DISMISS_VELOCITY) {
+
+        const shouldDismiss =
+          g.dx > DISMISS_THRESHOLD || g.vx > DISMISS_VELOCITY;
+
+        if (shouldDismiss) {
           globalDismissing = true;
           dismissedRef.current = true;
           setPointerEvents("none");
-          // Animate off-screen so there's no pause at the release point
-          Animated.spring(translateX, {
+
+          Animated.timing(translateX, {
             toValue: SCREEN_W,
-            velocity: g.vx,
+            duration: 200,
             useNativeDriver: true,
-            tension: 100,
-            friction: 14,
           }).start();
-          // Navigate immediately — the spring runs visually while the screen unmounts
+
           router.back();
-          setTimeout(() => { globalDismissing = false; }, 300);
+
+          setTimeout(() => {
+            globalDismissing = false;
+          }, 300);
         } else {
           Animated.spring(translateX, {
             toValue: 0,
             useNativeDriver: true,
-            tension: 120,
-            friction: 14,
+            stiffness: 300,
+            damping: 30,
+            mass: 0.8,
           }).start();
         }
       },
@@ -88,8 +140,9 @@ export function useSwipeBack() {
           Animated.spring(translateX, {
             toValue: 0,
             useNativeDriver: true,
-            tension: 120,
-            friction: 14,
+            stiffness: 300,
+            damping: 30,
+            mass: 0.8,
           }).start();
         }
       },
