@@ -6,16 +6,18 @@ import { usePlayer } from "@/contexts/PlayerContext";
 import { useSwipeBack } from "@/hooks/useSwipeBack";
 import { useTheme } from "@/hooks/useTheme";
 import { shuffle } from "@/utils/async";
+import { MINI_PLAYER_HEIGHT } from "@/components/MiniPlayer";
 import { AlbumScreenViewFull } from "@/views/AlbumScreenViewFull";
 import { AlbumScreenViewLight } from "@/views/AlbumScreenViewLight";
 
 export default function AlbumScreen() {
   const { albumId } = useLocalSearchParams<{ albumId: string }>();
   const { albums, fetchingArtAlbumIds = new Set(), fetchMissingArt } = useMusic();
-  const { playTrack } = usePlayer();
+  const { playTrack, currentTrack } = usePlayer();
   const theme = useTheme();
-  const insets = useSafeAreaInsets();
-  const { panHandlers, translateX } = useSwipeBack();
+  const rawInsets = useSafeAreaInsets();
+  const insets = { ...rawInsets, bottom: rawInsets.bottom + (currentTrack ? MINI_PLAYER_HEIGHT : 0) };
+  const { panHandlers, translateX, pointerEvents } = useSwipeBack();
 
   // Trigger art fetch (TTL-gated) when an album view is opened
   useEffect(() => {
@@ -40,6 +42,7 @@ export default function AlbumScreen() {
     tracks,
     panHandlers,
     translateX,
+    pointerEvents,
     onPlayAlbum: playAlbum,
     onShuffleAlbum: shuffleAlbum,
   };

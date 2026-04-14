@@ -1,4 +1,4 @@
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useState } from "react";
 import { PanResponder, Animated, Dimensions } from "react-native";
 import { router } from "expo-router";
 import { useIsFocused } from "@react-navigation/native";
@@ -18,12 +18,15 @@ export function useSwipeBack() {
   const translateX = useRef(new Animated.Value(0)).current;
   const isFocused = useIsFocused();
   const isFocusedRef = useRef(isFocused);
+  const dismissedRef = useRef(false);
+  const [pointerEvents, setPointerEvents] = useState<"auto" | "none">("auto");
 
   useEffect(() => {
     isFocusedRef.current = isFocused;
     if (isFocused) {
-      // Reset when screen comes back into focus
       translateX.setValue(0);
+      dismissedRef.current = false;
+      setPointerEvents("auto");
     }
   }, [isFocused]);
 
@@ -33,12 +36,14 @@ export function useSwipeBack() {
       onStartShouldSetPanResponderCapture: () => false,
       onMoveShouldSetPanResponder: (_, g) =>
         !globalDismissing &&
+        !dismissedRef.current &&
         isFocusedRef.current &&
         g.dx > 2 &&
         Math.abs(g.dx) > Math.abs(g.dy),
       // Capture horizontal swipes before the FlatList's ScrollView claims them
       onMoveShouldSetPanResponderCapture: (_, g) =>
         !globalDismissing &&
+        !dismissedRef.current &&
         isFocusedRef.current &&
         g.dx > 10 &&
         Math.abs(g.dx) > Math.abs(g.dy) * 1.5,
@@ -47,33 +52,35 @@ export function useSwipeBack() {
         if (g.dx > 0) translateX.setValue(g.dx);
       },
 
-onPanResponderRelease: (_, g) => {
-  if (globalDismissing) return;
-  if (g.dx > DISMISS_THRESHOLD || g.vx > DISMISS_VELOCITY) {
-    globalDismissing = true;
-    setTimeout(() => { globalDismissing = false; }, 1000);
-    // Animate off-screen with momentum from the swipe gesture
-    Animated.spring(translateX, {
-      toValue: SCREEN_W,
-      velocity: g.vx,
-      useNativeDriver: true,
-      tension: 100,
-      friction: 14,
-    }).start(() => {
-      router.back();
-    });
-  } else {
-    Animated.spring(translateX, {
-      toValue: 0,
-      useNativeDriver: true,
-      tension: 120,
-      friction: 14,
-    }).start();
-  }
-},
+      onPanResponderRelease: (_, g) => {
+        if (globalDismissing || dismissedRef.current) return;
+        if (g.dx > DISMISS_THRESHOLD || g.vx > DISMISS_VELOCITY) {
+          globalDismissing = true;
+          dismissedRef.current = true;
+          setPointerEvents("none");
+          // Animate off-screen so there's no pause at the release point
+          Animated.spring(translateX, {
+            toValue: SCREEN_W,
+            velocity: g.vx,
+            useNativeDriver: true,
+            tension: 100,
+            friction: 14,
+          }).start();
+          // Navigate immediately — the spring runs visually while the screen unmounts
+          router.back();
+          setTimeout(() => { globalDismissing = false; }, 300);
+        } else {
+          Animated.spring(translateX, {
+            toValue: 0,
+            useNativeDriver: true,
+            tension: 120,
+            friction: 14,
+          }).start();
+        }
+      },
 
       onPanResponderTerminate: () => {
-        if (!globalDismissing) {
+        if (!globalDismissing && !dismissedRef.current) {
           Animated.spring(translateX, {
             toValue: 0,
             useNativeDriver: true,
@@ -85,5 +92,5 @@ onPanResponderRelease: (_, g) => {
     })
   ).current;
 
-  return { panHandlers: panResponder.panHandlers, translateX };
+  return { panHandlers: panResponder.panHandlers, translateX, pointerEvents };
 }

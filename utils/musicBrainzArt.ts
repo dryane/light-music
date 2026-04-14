@@ -61,7 +61,7 @@ async function searchReleases(
   albumTitle: string
 ): Promise<any[]> {
   const query = `release:"${albumTitle}" AND artist:"${artistName}"`;
-  const url = `${MB_BASE}/release/?query=${encodeURIComponent(query)}&fmt=json&limit=5`;
+  const url = `${MB_BASE}/release/?query=${encodeURIComponent(query)}&fmt=json&limit=10`;
   const data = await mbFetch(url);
   return data?.releases ?? [];
 }

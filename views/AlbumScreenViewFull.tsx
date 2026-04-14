@@ -26,6 +26,7 @@ export function AlbumScreenViewFull({
   tracks,
   panHandlers,
   translateX,
+  pointerEvents,
   onPlayAlbum,
   onShuffleAlbum,
 }: AlbumScreenViewProps) {
@@ -34,6 +35,7 @@ export function AlbumScreenViewFull({
   if (!album) {
     return (
       <Animated.View
+        pointerEvents={pointerEvents}
         style={[
           styles.root,
           { backgroundColor: bg, paddingTop: insets.top, transform: [{ translateX }] },
@@ -112,6 +114,7 @@ export function AlbumScreenViewFull({
 
   return (
     <Animated.View
+      pointerEvents={pointerEvents}
       style={[
         styles.root,
         { backgroundColor: bg, paddingTop: insets.top, transform: [{ translateX }] },

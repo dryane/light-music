@@ -11,6 +11,7 @@ export interface ArtistScreenViewProps {
   allTracks: Track[];
   panHandlers: any;
   translateX: Animated.AnimatedInterpolation<number> | Animated.Value;
+  pointerEvents: "auto" | "none";
   onPlayAll: () => void;
   onShuffle: () => void;
   onNavigateToAlbum: (albumId: string) => void;

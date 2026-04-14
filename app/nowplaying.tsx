@@ -223,7 +223,7 @@ export default function NowPlayingScreen() {
           dismissingRef.current = true;
           setGlobalDismissing(true);
           router.back();
-          setTimeout(() => setGlobalDismissing(false), 1000);
+          setTimeout(() => setGlobalDismissing(false), 300);
         } else {
           Animated.spring(screenY, {
             toValue: 0,

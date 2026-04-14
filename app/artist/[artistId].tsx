@@ -6,6 +6,7 @@ import { usePlayer } from "@/contexts/PlayerContext";
 import { useSwipeBack } from "@/hooks/useSwipeBack";
 import { useTheme } from "@/hooks/useTheme";
 import { shuffle } from "@/utils/async";
+import { MINI_PLAYER_HEIGHT } from "@/components/MiniPlayer";
 import { Album, Track } from "@/types/music";
 import { ArtistScreenViewFull } from "@/views/ArtistScreenViewFull";
 import { ArtistScreenViewLight } from "@/views/ArtistScreenViewLight";
@@ -19,10 +20,11 @@ function isSingle(album: Album): boolean {
 export default function ArtistScreen() {
   const { artistId } = useLocalSearchParams<{ artistId: string }>();
   const { artists } = useMusic();
-  const { playTrack } = usePlayer();
+  const { playTrack, currentTrack } = usePlayer();
   const theme = useTheme();
-  const insets = useSafeAreaInsets();
-  const { panHandlers, translateX } = useSwipeBack();
+  const rawInsets = useSafeAreaInsets();
+  const insets = { ...rawInsets, bottom: rawInsets.bottom + (currentTrack ? MINI_PLAYER_HEIGHT : 0) };
+  const { panHandlers, translateX, pointerEvents } = useSwipeBack();
 
   const artist = artists.find((a) => a.id === artistId);
 
@@ -46,6 +48,7 @@ export default function ArtistScreen() {
     allTracks,
     panHandlers,
     translateX,
+    pointerEvents,
     onPlayAll: playAll,
     onShuffle: shuffleAll,
     onNavigateToAlbum: (albumId: string) =>

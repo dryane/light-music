@@ -10,6 +10,7 @@ export interface AlbumScreenViewProps {
   tracks: Track[];
   panHandlers: any;
   translateX: Animated.AnimatedInterpolation<number> | Animated.Value;
+  pointerEvents: "auto" | "none";
   onPlayAlbum: () => void;
   onShuffleAlbum: () => void;
 }

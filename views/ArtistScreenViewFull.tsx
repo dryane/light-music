@@ -28,6 +28,7 @@ export function ArtistScreenViewFull({
   allTracks,
   panHandlers,
   translateX,
+  pointerEvents,
   onPlayAll,
   onShuffle,
   onNavigateToAlbum,
@@ -38,6 +39,7 @@ export function ArtistScreenViewFull({
   if (!artist) {
     return (
       <Animated.View
+        pointerEvents={pointerEvents}
         style={[
           styles.root,
           { backgroundColor: bg, paddingTop: insets.top, transform: [{ translateX }] },
@@ -162,6 +164,7 @@ export function ArtistScreenViewFull({
 
   return (
     <Animated.View
+      pointerEvents={pointerEvents}
       style={[
         styles.root,
         { backgroundColor: bg, paddingTop: insets.top, transform: [{ translateX }] },

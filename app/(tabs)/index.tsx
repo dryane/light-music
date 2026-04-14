@@ -2,8 +2,10 @@ import React, { useMemo } from "react";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useMusic } from "@/contexts/MusicContext";
+import { usePlayer } from "@/contexts/PlayerContext";
 import { useTheme } from "@/hooks/useTheme";
 import { useHaptic } from "@/contexts/HapticContext";
+import { MINI_PLAYER_HEIGHT } from "@/components/MiniPlayer";
 import { Artist } from "@/types/music";
 import { ArtistListSection } from "@/views/ArtistListTypes";
 import { ArtistListViewFull } from "@/views/ArtistListViewFull";
@@ -40,8 +42,10 @@ export default function ArtistListScreen() {
     permissionGranted,
     requestPermission,
   } = useMusic();
+  const { currentTrack } = usePlayer();
   const { triggerHaptic } = useHaptic();
-  const insets = useSafeAreaInsets();
+  const rawInsets = useSafeAreaInsets();
+  const insets = { ...rawInsets, bottom: rawInsets.bottom + (currentTrack ? MINI_PLAYER_HEIGHT : 0) };
 
   const sections = useMemo(() => buildSections(artists), [artists]);
 

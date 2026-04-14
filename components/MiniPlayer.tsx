@@ -14,6 +14,9 @@ import { MiniPlayerFull } from "@/components/mini-player/MiniPlayerFull";
 import { MiniPlayerLight } from "@/components/mini-player/MiniPlayerLight";
 import { MiniPlayerViewProps } from "@/components/mini-player/types";
 
+/** Approximate height of the MiniPlayer for bottom padding calculations. */
+export const MINI_PLAYER_HEIGHT = 55;
+
 export function MiniPlayer() {
   const activeTrack = useActiveTrack();
   const playbackState = usePlaybackState();
