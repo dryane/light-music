@@ -4,7 +4,6 @@ import {
   StyleSheet,
   FlatList,
   TouchableOpacity,
-  Animated,
 } from "react-native";
 import { FontAwesome5 } from "@expo/vector-icons";
 import { StyledText } from "@/components/StyledText";
@@ -26,9 +25,6 @@ export function ArtistScreenViewLight({
   albums,
   singleTracks,
   allTracks,
-  panHandlers,
-  translateX,
-  pointerEvents,
   onPlayAll,
   onShuffle,
   onNavigateToAlbum,
@@ -38,18 +34,16 @@ export function ArtistScreenViewLight({
 
   if (!artist) {
     return (
-      <Animated.View
-        pointerEvents={pointerEvents}
+      <View
         style={[
           styles.root,
-          { backgroundColor: bg, paddingTop: insets.top, transform: [{ translateX }] },
+          { backgroundColor: bg, paddingTop: insets.top },
         ]}
-        {...panHandlers}
       >
         <View style={styles.centered}>
           <StyledText style={{ color: fgMuted }}>Artist not found.</StyledText>
         </View>
-      </Animated.View>
+      </View>
     );
   }
 
@@ -144,13 +138,11 @@ export function ArtistScreenViewLight({
   };
 
   return (
-    <Animated.View
-      pointerEvents={pointerEvents}
+    <View
       style={[
         styles.root,
-        { backgroundColor: bg, paddingTop: insets.top, transform: [{ translateX }] },
+        { backgroundColor: bg, paddingTop: insets.top },
       ]}
-      {...panHandlers}
     >
       <FlatList
         data={listData}
@@ -168,7 +160,7 @@ export function ArtistScreenViewLight({
           { paddingBottom: insets.bottom + 16 },
         ]}
       />
-    </Animated.View>
+    </View>
   );
 }
 
@@ -207,7 +199,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   info: { flex: 1, gap: 2 },
-  rowTitle: { fontSize: 12,  marginBottom: -3, letterSpacing: -0.3 },
+  rowTitle: { fontSize: 12, marginBottom: -3, letterSpacing: -0.3 },
   rowMeta: { fontSize: 8 },
   listContent: {},
 });

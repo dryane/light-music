@@ -19,8 +19,6 @@ export interface NowPlayingViewProps {
   thumbLeft: Animated.AnimatedInterpolation<string>;
   seekPanHandlers: any;
   artPanHandlers: any;
-  screenPanHandlers: any;
-  screenY: Animated.Value;
   artX: Animated.Value;
   artOpacity: Animated.Value;
   barLayoutHandler: (e: any) => void;

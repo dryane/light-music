@@ -3,7 +3,6 @@ import { useLocalSearchParams, router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useMusic } from "@/contexts/MusicContext";
 import { usePlayer } from "@/contexts/PlayerContext";
-import { useSwipeBack } from "@/hooks/useSwipeBack";
 import { useTheme } from "@/hooks/useTheme";
 import { shuffle } from "@/utils/async";
 import { MINI_PLAYER_HEIGHT } from "@/components/MiniPlayer";
@@ -24,7 +23,6 @@ export default function ArtistScreen() {
   const theme = useTheme();
   const rawInsets = useSafeAreaInsets();
   const insets = { ...rawInsets, bottom: rawInsets.bottom + (currentTrack ? MINI_PLAYER_HEIGHT : 0) };
-  const { panHandlers, translateX, pointerEvents } = useSwipeBack();
 
   const artist = artists.find((a) => a.id === artistId);
 
@@ -46,9 +44,6 @@ export default function ArtistScreen() {
     albums,
     singleTracks,
     allTracks,
-    panHandlers,
-    translateX,
-    pointerEvents,
     onPlayAll: playAll,
     onShuffle: shuffleAll,
     onNavigateToAlbum: (albumId: string) =>

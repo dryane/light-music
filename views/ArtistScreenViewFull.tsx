@@ -4,7 +4,6 @@ import {
   StyleSheet,
   FlatList,
   TouchableOpacity,
-  Animated,
 } from "react-native";
 import { FontAwesome5 } from "@expo/vector-icons";
 import { StyledText } from "@/components/StyledText";
@@ -26,9 +25,6 @@ export function ArtistScreenViewFull({
   albums,
   singleTracks,
   allTracks,
-  panHandlers,
-  translateX,
-  pointerEvents,
   onPlayAll,
   onShuffle,
   onNavigateToAlbum,
@@ -38,18 +34,16 @@ export function ArtistScreenViewFull({
 
   if (!artist) {
     return (
-      <Animated.View
-        pointerEvents={pointerEvents}
+      <View
         style={[
           styles.root,
-          { backgroundColor: bg, paddingTop: insets.top, transform: [{ translateX }] },
+          { backgroundColor: bg, paddingTop: insets.top },
         ]}
-        {...panHandlers}
       >
         <View style={styles.centered}>
           <StyledText style={{ color: fgMuted }}>Artist not found.</StyledText>
         </View>
-      </Animated.View>
+      </View>
     );
   }
 
@@ -163,13 +157,11 @@ export function ArtistScreenViewFull({
   };
 
   return (
-    <Animated.View
-      pointerEvents={pointerEvents}
+    <View
       style={[
         styles.root,
-        { backgroundColor: bg, paddingTop: insets.top, transform: [{ translateX }] },
+        { backgroundColor: bg, paddingTop: insets.top },
       ]}
-      {...panHandlers}
     >
       <FlatList
         data={listData}
@@ -187,7 +179,7 @@ export function ArtistScreenViewFull({
           { paddingBottom: insets.bottom + 16 },
         ]}
       />
-    </Animated.View>
+    </View>
   );
 }
 

@@ -25,8 +25,6 @@ export function NowPlayingViewLight({
   thumbLeft,
   seekPanHandlers,
   artPanHandlers,
-  screenPanHandlers,
-  screenY,
   artX,
   artOpacity,
   barLayoutHandler,
@@ -47,17 +45,15 @@ export function NowPlayingViewLight({
   }
 
   return (
-    <Animated.View
+    <View
       style={[
         styles.root,
         {
           backgroundColor: bg,
           paddingTop: insets.top + 12,
           paddingBottom: insets.bottom + 16,
-          transform: [{ translateY: screenY }],
         },
       ]}
-      {...screenPanHandlers}
     >
       <View style={styles.handleWrap}>
         <View style={[styles.handle, { backgroundColor: fgDim }]} />
@@ -116,7 +112,7 @@ export function NowPlayingViewLight({
         <PlayPauseButton isPlaying={isPlaying} onPress={onTogglePlayPause} color={fg} size={100} />
         <SkipNextButton onPress={onSkipNext} color={fg} size={18} />
       </View>
-    </Animated.View>
+    </View>
   );
 }
 

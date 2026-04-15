@@ -151,7 +151,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     const track = trackMapRef.current.get(activeTrack.id);
     if (track) {
       console.log(`[PLAYER] Now playing: "${track.title}" by ${track.artist}`);
-      console.log(`[PLAYER]   album: "${track.album}" | albumArt: ${track.albumArt ? track.albumArt.substring(0, 80) + "..." : "null"}`);
+      console.log(`[PLAYER] ↳ album: "${track.album}" | albumArt: ${track.albumArt ? track.albumArt.substring(0, 80) + "..." : "null"}`);
       setCurrentTrack(track);
     }
   }, [activeTrack?.id]);

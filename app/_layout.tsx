@@ -1,9 +1,16 @@
-import { Stack, useSegments } from "expo-router";
+import { useSegments } from "expo-router";
+import { withLayoutContext } from "expo-router";
+import {
+  createStackNavigator,
+  TransitionPresets,
+} from "@react-navigation/stack";
+import type { StackNavigationOptions, StackNavigationEventMap } from "@react-navigation/stack";
+import type { ParamListBase, StackNavigationState } from "@react-navigation/native";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useRef } from "react";
 import * as SplashScreen from "expo-splash-screen";
 import { useFonts } from "expo-font";
-import { View, StyleSheet, AppState } from "react-native";
+import { View, StyleSheet, AppState, Dimensions } from "react-native";
 import TrackPlayer, { State } from "react-native-track-player";
 import { usePlaybackState } from "react-native-track-player";
 import { InvertColorsProvider } from "@/contexts/InvertColorsContext";
@@ -13,7 +20,7 @@ import { MusicProvider } from "@/contexts/MusicContext";
 import { ThemeVariantProvider } from "@/contexts/ThemeVariantContext";
 import { MiniPlayer } from "@/components/MiniPlayer";
 import { useTheme } from "@/hooks/useTheme";
-import { pushNowPlayingInstant } from "@/hooks/useNowPlayingNav"; // Bug fix: was missing
+import { pushNowPlayingInstant } from "@/hooks/useNowPlayingNav";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -24,14 +31,23 @@ if (!serviceRegistered) {
   TrackPlayer.registerPlaybackService(() => require("../service"));
 }
 
+// JS-based stack navigator — supports gestures on transparentModal screens
+const { Navigator } = createStackNavigator();
+const JsStack = withLayoutContext<
+  StackNavigationOptions,
+  typeof Navigator,
+  StackNavigationState<ParamListBase>,
+  StackNavigationEventMap
+>(Navigator);
+
+const SCREEN_W = Dimensions.get("window").width;
+
 function AppShell() {
   const { bg } = useTheme();
   const playbackState = usePlaybackState();
   const segments = useSegments();
   const appState = useRef(AppState.currentState);
 
-  // When the app returns to foreground while a track is playing,
-  // immediately navigate to the now-playing screen (skip slide animation).
   useEffect(() => {
     const sub = AppState.addEventListener("change", (nextState) => {
       if (
@@ -47,9 +63,7 @@ function AppShell() {
               pushNowPlayingInstant();
             }
           })
-          .catch(() => {
-            // Player not yet initialised — ignore
-          });
+          .catch(() => {});
       }
       appState.current = nextState;
     });
@@ -58,41 +72,48 @@ function AppShell() {
 
   return (
     <View style={[styles.root, { backgroundColor: bg }]}>
-      <Stack
+      <JsStack
         screenOptions={{
           headerShown: false,
-          animation: "none",
-          contentStyle: { backgroundColor: "transparent" },
+          animationEnabled: false,
+          cardStyle: { backgroundColor: "transparent" },
+          detachPreviousScreen: false,
         }}
       >
-        <Stack.Screen name="(tabs)" />
-        <Stack.Screen
+        <JsStack.Screen name="(tabs)" />
+        <JsStack.Screen
           name="artist/[artistId]"
           options={{
             presentation: "transparentModal",
-            animation: "slide_from_right",
-            gestureEnabled: false,
+            gestureEnabled: true,
+            gestureDirection: "horizontal",
+            gestureResponseDistance: SCREEN_W * 0.3,
             cardOverlayEnabled: false,
+            ...TransitionPresets.SlideFromRightIOS,
           }}
         />
-        <Stack.Screen
+        <JsStack.Screen
           name="album/[albumId]"
           options={{
             presentation: "transparentModal",
-            animation: "slide_from_right",
-            gestureEnabled: false,
+            gestureEnabled: true,
+            gestureDirection: "horizontal",
+            gestureResponseDistance: SCREEN_W * 0.3,
             cardOverlayEnabled: false,
+            ...TransitionPresets.SlideFromRightIOS,
           }}
         />
-        <Stack.Screen
+        <JsStack.Screen
           name="nowplaying"
           options={{
             presentation: "transparentModal",
-            animation: "slide_from_bottom",
-            gestureEnabled: false,
+            gestureEnabled: true,
+            gestureDirection: "vertical",
+            cardOverlayEnabled: false,
+            ...TransitionPresets.ModalSlideFromBottomIOS,
           }}
         />
-      </Stack>
+      </JsStack>
       <MiniPlayer />
     </View>
   );

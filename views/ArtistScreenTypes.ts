@@ -1,4 +1,3 @@
-import { Animated } from "react-native";
 import { Theme } from "@/hooks/useTheme";
 import { Album, Artist, Track } from "@/types/music";
 
@@ -9,9 +8,6 @@ export interface ArtistScreenViewProps {
   albums: Album[];
   singleTracks: Track[];
   allTracks: Track[];
-  panHandlers: any;
-  translateX: Animated.AnimatedInterpolation<number> | Animated.Value;
-  pointerEvents: "auto" | "none";
   onPlayAll: () => void;
   onShuffle: () => void;
   onNavigateToAlbum: (albumId: string) => void;

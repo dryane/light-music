@@ -3,7 +3,6 @@ import { useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useMusic } from "@/contexts/MusicContext";
 import { usePlayer } from "@/contexts/PlayerContext";
-import { useSwipeBack } from "@/hooks/useSwipeBack";
 import { useTheme } from "@/hooks/useTheme";
 import { shuffle } from "@/utils/async";
 import { MINI_PLAYER_HEIGHT } from "@/components/MiniPlayer";
@@ -17,7 +16,6 @@ export default function AlbumScreen() {
   const theme = useTheme();
   const rawInsets = useSafeAreaInsets();
   const insets = { ...rawInsets, bottom: rawInsets.bottom + (currentTrack ? MINI_PLAYER_HEIGHT : 0) };
-  const { panHandlers, translateX, pointerEvents } = useSwipeBack();
 
   // Trigger art fetch (TTL-gated) when an album view is opened
   useEffect(() => {
@@ -40,9 +38,6 @@ export default function AlbumScreen() {
     album,
     isArtLoading,
     tracks,
-    panHandlers,
-    translateX,
-    pointerEvents,
     onPlayAlbum: playAlbum,
     onShuffleAlbum: shuffleAlbum,
   };

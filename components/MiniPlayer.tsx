@@ -69,8 +69,8 @@ export function MiniPlayer() {
         Animated.spring(slideAnim, {
           toValue: 0,
           useNativeDriver: true,
-          tension: 100,
-          friction: 14,
+          tension: 50,
+          friction: 12,
         }).start();
       } else {
         // Already animated in before — make sure it's at the visible position

@@ -10,17 +10,13 @@ import {
   usePlaybackState,
   State,
 } from "react-native-track-player";
-import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { usePlayer } from "@/contexts/PlayerContext";
 import { useTheme } from "@/hooks/useTheme";
-import { setGlobalDismissing } from "@/hooks/useSwipeBack";
 import { NowPlayingViewFull } from "@/views/NowPlayingViewFull";
 import { NowPlayingViewLight } from "@/views/NowPlayingViewLight";
 
-const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get("window");
-const DISMISS_THRESHOLD = SCREEN_H * 0.28;
-const DISMISS_VELOCITY = 0.6;
+const { width: SCREEN_W } = Dimensions.get("window");
 const ART_SWIPE_THRESHOLD = 80;
 
 export default function NowPlayingScreen() {
@@ -45,7 +41,6 @@ export default function NowPlayingScreen() {
       wasPlayingRef.current = false;
       return false;
     }
-    // Buffering/Loading/Ready — hold previous intent
     return wasPlayingRef.current;
   })();
 
@@ -68,7 +63,6 @@ export default function NowPlayingScreen() {
   useEffect(() => { durationRef.current = duration; }, [duration]);
   useEffect(() => { isPlayingRef.current = isPlaying; }, [isPlaying]);
 
-  // Keep refs for functions used inside PanResponder closures
   const pauseRef = useRef(pause);
   const playRef = useRef(play);
   const seekToRef = useRef(seekTo);
@@ -205,46 +199,6 @@ export default function NowPlayingScreen() {
     })
   ).current;
 
-  // ─── Screen dismiss swipe down ─────────────────────────────────────────────
-  const screenY = useRef(new Animated.Value(0)).current;
-  const dismissingRef = useRef(false);
-
-  const screenPan = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => false,
-      onMoveShouldSetPanResponder: (_, g) =>
-        !dismissingRef.current && g.dy > 2 && Math.abs(g.dy) > Math.abs(g.dx) * 1.5,
-      onPanResponderMove: (_, g) => {
-        if (!dismissingRef.current && g.dy > 0) screenY.setValue(g.dy);
-      },
-      onPanResponderRelease: (_, g) => {
-        if (dismissingRef.current) return;
-        if (g.dy > DISMISS_THRESHOLD || g.vy > DISMISS_VELOCITY) {
-          dismissingRef.current = true;
-          setGlobalDismissing(true);
-          router.back();
-          setTimeout(() => setGlobalDismissing(false), 300);
-        } else {
-          Animated.spring(screenY, {
-            toValue: 0,
-            useNativeDriver: true,
-            tension: 120,
-            friction: 14,
-          }).start();
-        }
-      },
-      onPanResponderTerminate: () => {
-        if (dismissingRef.current) return;
-        Animated.spring(screenY, {
-          toValue: 0,
-          useNativeDriver: true,
-          tension: 120,
-          friction: 14,
-        }).start();
-      },
-    })
-  ).current;
-
   const barLayoutHandler = (e: any) => {
     barWidth.current = e.nativeEvent.layout.width;
     e.target.measure((_x: number, _y: number, _w: number, _h: number, pageX: number) => {
@@ -264,8 +218,6 @@ export default function NowPlayingScreen() {
     thumbLeft,
     seekPanHandlers: seekPan.panHandlers,
     artPanHandlers: artPan.panHandlers,
-    screenPanHandlers: screenPan.panHandlers,
-    screenY: screenY,
     artX,
     artOpacity,
     barLayoutHandler,

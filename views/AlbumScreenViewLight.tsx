@@ -4,11 +4,9 @@ import {
   StyleSheet,
   FlatList,
   TouchableOpacity,
-  Animated,
 } from "react-native";
 import { FontAwesome5 } from "@expo/vector-icons";
 import { StyledText } from "@/components/StyledText";
-import { AlbumArt } from "@/components/AlbumArt";
 import { TrackRow } from "@/components/TrackRow";
 import { AlbumScreenViewProps } from "@/views/AlbumScreenTypes";
 import { Track } from "@/types/music";
@@ -24,9 +22,6 @@ export function AlbumScreenViewLight({
   album,
   isArtLoading,
   tracks,
-  panHandlers,
-  translateX,
-  pointerEvents,
   onPlayAlbum,
   onShuffleAlbum,
 }: AlbumScreenViewProps) {
@@ -34,18 +29,16 @@ export function AlbumScreenViewLight({
 
   if (!album) {
     return (
-      <Animated.View
-        pointerEvents={pointerEvents}
+      <View
         style={[
           styles.root,
-          { backgroundColor: bg, paddingTop: insets.top, transform: [{ translateX }] },
+          { backgroundColor: bg, paddingTop: insets.top },
         ]}
-        {...panHandlers}
       >
         <View style={styles.centered}>
           <StyledText style={{ color: fgMuted }}>Album not found.</StyledText>
         </View>
-      </Animated.View>
+      </View>
     );
   }
 
@@ -112,13 +105,11 @@ export function AlbumScreenViewLight({
   };
 
   return (
-    <Animated.View
-      pointerEvents={pointerEvents}
+    <View
       style={[
         styles.root,
-        { backgroundColor: bg, paddingTop: insets.top, transform: [{ translateX }] },
+        { backgroundColor: bg, paddingTop: insets.top },
       ]}
-      {...panHandlers}
     >
       <FlatList
         data={listData}
@@ -134,7 +125,7 @@ export function AlbumScreenViewLight({
           { paddingBottom: insets.bottom + 16 },
         ]}
       />
-    </Animated.View>
+    </View>
   );
 }
 
