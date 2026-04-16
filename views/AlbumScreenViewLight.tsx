@@ -60,17 +60,6 @@ export function AlbumScreenViewLight({
             <StyledText style={[styles.albumTitle, { color: fg }]} numberOfLines={1}>
               {album.title}
             </StyledText>
-            <StyledText style={[styles.albumMeta, { color: fgMuted }]}>
-              {[album.year, `${tracks.length} songs`].filter(Boolean).join(" · ")}
-            </StyledText>
-          </View>
-          <View style={styles.headerIcons}>
-            <TouchableOpacity onPress={onPlayAlbum} hitSlop={12}>
-              <FontAwesome5 name="play" size={16} color={fg} solid />
-            </TouchableOpacity>
-            <TouchableOpacity onPress={onShuffleAlbum} hitSlop={12}>
-              <FontAwesome5 name="random" size={16} color={fgMuted} solid />
-            </TouchableOpacity>
           </View>
         </View>
       );

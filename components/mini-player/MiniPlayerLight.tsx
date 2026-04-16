@@ -32,13 +32,6 @@ export function MiniPlayerLight({
       </View>
 
       <View style={[styles.container, { backgroundColor: bg, borderTopColor: border }]}>
-        <TouchableOpacity
-          onPress={onNavigate}
-          activeOpacity={1}
-          style={!hasArtwork ? { marginRight: -11 } : undefined}
-        >
-          <AlbumArt uri={activeTrack.artwork ?? null} size={34} radius={4} />
-        </TouchableOpacity>
 
         <Pressable style={styles.info} onPress={onNavigate}>
           <StyledText style={[styles.title, { color: fg }]} numberOfLines={1}>

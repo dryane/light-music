@@ -72,14 +72,6 @@ export function ArtistScreenViewLight({
               {artist.name}
             </StyledText>
           </View>
-          <View style={styles.headerIcons}>
-            <TouchableOpacity onPress={onPlayAll} hitSlop={12}>
-              <FontAwesome5 name="play" size={16} color={fg} solid />
-            </TouchableOpacity>
-            <TouchableOpacity onPress={onShuffle} hitSlop={12}>
-              <FontAwesome5 name="random" size={16} color={fgMuted} solid />
-            </TouchableOpacity>
-          </View>
         </View>
       );
     }
