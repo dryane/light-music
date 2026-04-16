@@ -19,6 +19,7 @@ export function TrackRowFull({
     <TouchableOpacity
       onPress={onPress}
       activeOpacity={0.5}
+      delayPressIn={75}
       style={[styles.row, { borderBottomColor: border, fontFamily: font }]}
     >
       <View style={styles.numWrap}>

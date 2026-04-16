@@ -20,6 +20,7 @@ export function TrackRowLight({
     <TouchableOpacity
       onPress={onPress}
       activeOpacity={0.5}
+      delayPressIn={75}
       style={[styles.row, { fontFamily: font }]}
     >
       <View style={styles.numWrap}>
