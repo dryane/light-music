@@ -39,10 +39,10 @@ const CACHE_KEY = "library_cache_v14";
 const CACHE_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 365;
 const ART_TTL_KEY = "art_fetch_last_run";
 const ART_TTL_MS = 1000 * 60 * 60 * 24; // 24 hours
-const CONCURRENCY = 4;
+const CONCURRENCY = 6;
 
 /** When true, only scans /Download/Persisted/Music/ (Light Phone target path). */
-const LIGHT_PHONE_MODE = true;
+const LIGHT_PHONE_MODE = false;
 const LIGHT_PHONE_MUSIC_PATH = "/Download/Persisted/Music/";
 
 // Set to true to save embedded cover art extracted from file metadata.
@@ -128,231 +128,272 @@ export function useMediaLibrary() {
   // ── Scan ────────────────────────────────────────────────────────────────────
   const silentScanRef = useRef(false);
 
-  const scan = useCallback(
-    async (
-      silent = false,
-      existingCache?: CachedLibrary | null,
-    ) => {
-      // If a scan is already running, only block if this is also silent
-      // A non-silent (user-facing) scan always takes priority
-      if (scanInProgress.current) {
-        if (silent) return;
-        // Cancel the in-progress silent scan and take over
-        cancelled.current = true;
-        // Wait a tick for the cancelled scan to bail out
-        await new Promise<void>((r) => setTimeout(r, 0));
-      }
-      scanInProgress.current = true;
-      silentScanRef.current = silent;
-      cancelled.current = false;
+    const currentScanId = useRef(0);
 
-      if (!silent) {
-        setState((s) => ({ ...s, loading: true, scanProgress: 0, error: null }));
-      }
+    const scan = useCallback(
+      async (silent = false, existingCache?: CachedLibrary | null) => {
+        // Increment scan ID (invalidates all previous scans)
+        currentScanId.current++;
+        const scanId = currentScanId.current;
 
-      try {
-        // ── Fetch all audio assets ─────────────────────────────────────────
-        let assets: MediaLibrary.Asset[] = [];
-        let after: string | undefined;
-        let hasMore = true;
+        scanInProgress.current = true;
+        cancelled.current = false;
 
         if (!silent) {
-          setState((s) => ({ ...s, scanStatus: "Finding audio files…" }));
-        }
-
-        while (hasMore) {
-          const page = await MediaLibrary.getAssetsAsync({
-            mediaType: MediaLibrary.MediaType.audio,
-            first: 300,
-            after,
-            sortBy: MediaLibrary.SortBy.default,
-          });
-          assets = [...assets, ...page.assets];
-          hasMore = page.hasNextPage;
-          after = page.endCursor;
-        }
-
-        if (LIGHT_PHONE_MODE) {
-          assets = assets.filter((a) => a.uri.includes(LIGHT_PHONE_MUSIC_PATH));
-        }
-
-        if (cancelled.current) return;
-
-        if (!silent) {
-          setState((s) => ({ ...s, scanStatus: "Preparing library…" }));
-        }
-
-        await ensureArtDir();
-
-        // ── Restore cached art + mod times ─────────────────────────────────
-        const artCache = new Map<string, string | null>();
-        const cachedTrackMap = new Map<string, Track>();
-
-        if (existingCache?.tracks) {
-          for (const t of existingCache.tracks) cachedTrackMap.set(t.id, t);
-        }
-        const cachedModTimes = existingCache?.assetModTimes ?? {};
-
-        const savedArtMap = await loadArtCache();
-        for (const [albumId, artPath] of Object.entries(savedArtMap)) {
-          artCache.set(albumId, artPath);
-        }
-        if (existingCache?.tracks) {
-          for (const t of existingCache.tracks) {
-            if (t.albumArt && !artCache.has(t.albumId)) {
-              artCache.set(t.albumId, t.albumArt);
-            }
-          }
-        }
-
-        // ── Split assets into cached vs new ────────────────────────────────
-        const newAssets: MediaLibrary.Asset[] = [];
-        const cachedAssets: MediaLibrary.Asset[] = [];
-
-        for (const asset of assets) {
-          const modTime = (asset as any).modificationTime ?? 0;
-          const hasCachedTrack = cachedTrackMap.has(asset.id);
-          const prevModTime = cachedModTimes[asset.id];
-          if (hasCachedTrack && prevModTime && prevModTime === modTime) {
-            cachedAssets.push(asset);
-          } else {
-            newAssets.push(asset);
-          }
-        }
-
-        const tracks: Track[] = [];
-
-        // Restore unchanged tracks from cache
-        for (const asset of cachedAssets) {
-          const cached = cachedTrackMap.get(asset.id)!;
-          const resolvedArt = artCache.get(cached.albumId) ?? cached.albumArt ?? null;
-          tracks.push({ ...cached, albumArt: resolvedArt });
-        }
-
-        // Show progress for cached assets immediately
-        if (!silent && cachedAssets.length > 0 && assets.length > 0) {
           setState((s) => ({
             ...s,
-            scanProgress: cachedAssets.length / assets.length,
-            scanStatus: "Reading your music files…",
+            loading: true,
+            scanProgress: 0,
+            error: null,
           }));
         }
 
-        // ── Phase 1: Metadata scan ─────────────────────────────────────────
+        try {
+          // ── Fetch assets ───────────────────────────────────────────────
+          let assets: MediaLibrary.Asset[] = [];
+          let after: string | undefined;
+          let hasMore = true;
 
-        if (newAssets.length > 0) {
-          let processed = 0;
-          let lastStatus = "Reading your music files…";
-
-          // Progress updates via interval timer — runs on the main event loop
-          // so React can paint, regardless of how pLimit batches the work
-          let progressInterval: ReturnType<typeof setInterval> | null = null;
           if (!silent) {
-            setState((s) => ({ ...s, scanStatus: lastStatus }));
-            progressInterval = setInterval(() => {
-              setState((s) => ({
-                ...s,
-                scanProgress: (cachedAssets.length + processed) / assets.length,
-                scanStatus: lastStatus,
-              }));
-            }, 50);
+            setState((s) => ({ ...s, scanStatus: "Finding audio files…" }));
           }
 
-          const tasks = newAssets.map((asset) => async () => {
-            if (cancelled.current) return;
+          while (hasMore) {
+            if (scanId !== currentScanId.current) return;
 
-            const meta = await readMetadata(asset.uri, asset.filename);
-            const aKey = albumKey(meta.albumArtist, meta.album);
-
-            if (!artCache.has(aKey)) {
-              const existing = await artFileExists(aKey);
-              if (existing) {
-                artCache.set(aKey, existing);
-              } else if (USE_EMBEDDED_ART && meta.albumArtBase64) {
-                try {
-                  const filePath = await saveArtFile(aKey, meta.albumArtBase64);
-                  artCache.set(aKey, filePath);
-                } catch {
-                  artCache.set(aKey, null);
-                }
-              } else {
-                artCache.set(aKey, null);
-              }
-            }
-
-            tracks.push({
-              id: asset.id,
-              title: meta.title,
-              artist: meta.artist,
-              albumArtist: meta.albumArtist,
-              artistId: artistKey(meta.albumArtist),
-              album: meta.album,
-              albumId: aKey,
-              albumArt: artCache.get(aKey) ?? null,
-              duration: asset.duration * 1000,
-              uri: asset.uri,
-              year: meta.year,
-              releaseDate: meta.releaseDate,
-              trackNumber: meta.trackNumber,
+            const page = await MediaLibrary.getAssetsAsync({
+              mediaType: MediaLibrary.MediaType.audio,
+              first: 300,
+              after,
+              sortBy: MediaLibrary.SortBy.default,
             });
 
-            processed++;
-            lastStatus = `${meta.albumArtist ?? "Unknown"} — ${meta.album ?? "Unknown"}`;
-          });
+            assets = assets.concat(page.assets);
+            hasMore = page.hasNextPage;
+            after = page.endCursor;
+          }
 
-          await pLimit(tasks, CONCURRENCY);
+          if (LIGHT_PHONE_MODE) {
+            assets = assets.filter((a) =>
+              a.uri.includes(LIGHT_PHONE_MUSIC_PATH)
+            );
+          }
 
-          // Clean up progress timer and do a final update
-          if (progressInterval) {
-            clearInterval(progressInterval);
+          if (scanId !== currentScanId.current) return;
+
+          if (!silent) {
+            setState((s) => ({ ...s, scanStatus: "Preparing library…" }));
+          }
+
+          await ensureArtDir();
+
+          // ── Cache prep ────────────────────────────────────────────────
+          const artCache = new Map<string, string | null>();
+          const cachedTrackMap = new Map<string, Track>();
+
+          if (existingCache?.tracks) {
+            for (const t of existingCache.tracks) {
+              cachedTrackMap.set(t.id, t);
+            }
+          }
+
+          const cachedModTimes = existingCache?.assetModTimes ?? {};
+
+          const savedArtMap = await loadArtCache();
+          for (const [k, v] of Object.entries(savedArtMap)) {
+            artCache.set(k, v);
+          }
+
+          // ── Split assets ──────────────────────────────────────────────
+          const newAssets: MediaLibrary.Asset[] = [];
+          const cachedAssets: MediaLibrary.Asset[] = [];
+
+          for (const asset of assets) {
+            const modTime = (asset as any).modificationTime ?? 0;
+            const prev = cachedModTimes[asset.id];
+
+            if (cachedTrackMap.has(asset.id) && prev && prev === modTime) {
+              cachedAssets.push(asset);
+            } else {
+              newAssets.push(asset);
+            }
+          }
+
+          const tracks: Track[] = [];
+
+          for (const asset of cachedAssets) {
+            const cached = cachedTrackMap.get(asset.id)!;
+            const resolvedArt =
+              artCache.get(cached.albumId) ?? cached.albumArt ?? null;
+
+            tracks.push({ ...cached, albumArt: resolvedArt });
+          }
+
+          if (!silent && cachedAssets.length > 0 && assets.length > 0) {
             setState((s) => ({
               ...s,
-              scanProgress: (cachedAssets.length + newAssets.length) / assets.length,
-              scanStatus: "",
+              scanProgress: cachedAssets.length / assets.length,
+              scanStatus: "Reading your music files…",
             }));
           }
+
+          const t0 = global.performance?.now?.() ?? Date.now();
+          // ── Phase 1: Metadata scan (SAFE) ─────────────────────────────
+          if (newAssets.length > 0) {
+            let processed = 0;
+            let lastStatus = "Reading your music files…";
+
+            const keyCache = new Map<
+              string,
+              { albumId: string; artistId: string }
+            >();
+
+            const newTracks: Track[] = new Array(newAssets.length);
+
+            let progressInterval: ReturnType<typeof setInterval> | null = null;
+
+            if (!silent) {
+              progressInterval = setInterval(() => {
+                if (scanId !== currentScanId.current) return;
+
+                setState((s) => ({
+                  ...s,
+                  scanProgress:
+                    (cachedAssets.length + processed) / assets.length,
+                  scanStatus: lastStatus,
+                }));
+              }, 200);
+            }
+
+            const tasks = newAssets.map((asset, index) => async () => {
+              if (scanId !== currentScanId.current) return;
+
+              const meta = await readMetadata(asset.uri, asset.filename);
+
+              // 🔴 CRITICAL: check AGAIN after await
+              if (scanId !== currentScanId.current) return;
+
+              const keyStr =
+                (meta.albumArtist || "") + "||" + (meta.album || "");
+
+              let keys = keyCache.get(keyStr);
+              if (!keys) {
+                keys = {
+                  albumId: albumKey(meta.albumArtist, meta.album),
+                  artistId: artistKey(meta.albumArtist),
+                };
+                keyCache.set(keyStr, keys);
+              }
+
+              newTracks[index] = {
+                id: asset.id,
+                title: meta.title,
+                artist: meta.artist,
+                albumArtist: meta.albumArtist,
+                artistId: keys.artistId,
+                album: meta.album,
+                albumId: keys.albumId,
+                albumArt: null,
+                duration: asset.duration * 1000,
+                uri: asset.uri,
+                year: meta.year,
+                releaseDate: meta.releaseDate,
+                trackNumber: meta.trackNumber,
+              };
+
+              processed++;
+
+              if (processed % 10 === 0) {
+                lastStatus = `${
+                  meta.albumArtist ?? "Unknown"
+                } — ${meta.album ?? "Unknown"}`;
+              }
+            });
+
+            await pLimit(tasks, CONCURRENCY);
+
+            if (scanId !== currentScanId.current) return;
+            const t1 = global.performance?.now?.() ?? Date.now();
+
+            console.log(`Phase 1 took: ${(t1 - t0).toFixed(1)} ms`);
+
+            // ── Batch album art resolution ──────────────────────────────
+            const uniqueAlbumIds = [
+              ...new Set(newTracks.map((t) => t.albumId)),
+            ];
+
+            await Promise.all(
+              uniqueAlbumIds.map(async (aKey) => {
+                if (scanId !== currentScanId.current) return;
+
+                if (!artCache.has(aKey)) {
+                  const existing = await artFileExists(aKey);
+                  artCache.set(aKey, existing ?? null);
+                }
+              })
+            );
+
+            if (scanId !== currentScanId.current) return;
+
+            for (const t of newTracks) {
+              if (!t) continue;
+              t.albumArt = artCache.get(t.albumId) ?? null;
+              tracks.push(t);
+            }
+
+            if (progressInterval) {
+              clearInterval(progressInterval);
+            }
+          }
+
+          if (scanId !== currentScanId.current) return;
+
+          // ── Finalize ─────────────────────────────────────────────────
+          const newModTimes: Record<string, number> = {};
+          for (const asset of assets) {
+            newModTimes[asset.id] =
+              (asset as any).modificationTime ?? 0;
+          }
+
+          const sortedTracks = [...tracks].sort((a, b) =>
+            a.title.localeCompare(b.title)
+          );
+
+          const lib = buildLibrary(tracks);
+
+          await saveLibraryCache(sortedTracks, assets.length, newModTimes);
+          await saveArtCache(sortedTracks);
+
+          if (scanId !== currentScanId.current) return;
+
+          setState({
+            tracks: sortedTracks,
+            albums: lib.albums,
+            artists: lib.artists,
+            loading: false,
+            initialized: true,
+            scanProgress: 1,
+            scanStatus: "",
+            error: null,
+            permissionGranted: true,
+            fetchingArtAlbumIds: new Set(),
+          });
+        } catch (e: any) {
+          if (scanId !== currentScanId.current) return;
+
+          setState((s) => ({
+            ...s,
+            loading: false,
+            error: e?.message ?? "Failed to scan music library",
+          }));
+        } finally {
+          if (scanId === currentScanId.current) {
+            scanInProgress.current = false;
+          }
         }
-
-        if (cancelled.current) return;
-
-        // ── Show library after Phase 1 ─────────────────────────────────────
-        const newModTimes: Record<string, number> = {};
-        for (const asset of assets) {
-          newModTimes[asset.id] = (asset as any).modificationTime ?? 0;
-        }
-
-        const sortedTracks = [...tracks].sort((a, b) =>
-          a.title.localeCompare(b.title)
-        );
-        const lib1 = buildLibrary(tracks);
-
-        await saveLibraryCache(sortedTracks, assets.length, newModTimes);
-        await saveArtCache(sortedTracks);
-
-        setState({
-          tracks: sortedTracks,
-          albums: lib1.albums,
-          artists: lib1.artists,
-          loading: false,
-          initialized: true,
-          scanProgress: 1,
-          scanStatus: "",
-          error: null,
-          permissionGranted: true,
-          fetchingArtAlbumIds: new Set(),
-        });
-      } catch (e: any) {
-        setState((s) => ({
-          ...s,
-          loading: false,
-          error: e?.message ?? "Failed to scan music library",
-        }));
-      } finally {
-        scanInProgress.current = false;
-      }
-    },
-    []
-  );
+      },
+      []
+    );
 
   // ── Fetch missing album art (Phase 2) — TTL gated, called from album view ──
   const artFetchInProgress = useRef(false);
