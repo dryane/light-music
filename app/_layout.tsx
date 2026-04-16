@@ -20,7 +20,7 @@ import { MusicProvider } from "@/contexts/MusicContext";
 import { ThemeVariantProvider } from "@/contexts/ThemeVariantContext";
 import { MiniPlayer } from "@/components/MiniPlayer";
 import { useTheme } from "@/hooks/useTheme";
-import { pushNowPlayingInstant } from "@/hooks/useNowPlayingNav";
+import { pushNowPlayingInstant, getSkipAnimation, clearSkipAnimation } from "@/hooks/useNowPlayingNav";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -43,7 +43,7 @@ const JsStack = withLayoutContext<
 const SCREEN_W = Dimensions.get("window").width;
 
 function AppShell() {
-  const { bg } = useTheme();
+  const { bg, animate } = useTheme();
   const playbackState = usePlaybackState();
   const segments = useSegments();
   const appState = useRef(AppState.currentState);
@@ -70,6 +70,33 @@ function AppShell() {
     return () => sub.remove();
   }, [segments]);
 
+  const slideOptions = {
+    gestureEnabled: true,
+    gestureDirection: "horizontal" as const,
+    gestureResponseDistance: SCREEN_W * 0.3,
+    cardOverlayEnabled: false,
+    animationEnabled: animate,
+    cardStyleInterpolator: animate
+      ? ({ current, next, layouts }: any) => ({
+          cardStyle: {
+            transform: [
+              {
+                translateX: next
+                  ? next.progress.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0, -layouts.screen.width * 0.1],
+                    })
+                  : current.progress.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [layouts.screen.width, 0],
+                    }),
+              },
+            ],
+          },
+        })
+      : () => ({ cardStyle: {} }),
+  };
+
   return (
     <View style={[styles.root, { backgroundColor: bg }]}>
       <JsStack
@@ -81,36 +108,21 @@ function AppShell() {
         }}
       >
         <JsStack.Screen name="(tabs)" />
-        <JsStack.Screen
-          name="artist/[artistId]"
-          options={{
-            presentation: "transparentModal",
-            gestureEnabled: true,
-            gestureDirection: "horizontal",
-            gestureResponseDistance: SCREEN_W * 0.3,
-            cardOverlayEnabled: false,
-            ...TransitionPresets.SlideFromRightIOS,
-          }}
-        />
-        <JsStack.Screen
-          name="album/[albumId]"
-          options={{
-            presentation: "transparentModal",
-            gestureEnabled: true,
-            gestureDirection: "horizontal",
-            gestureResponseDistance: SCREEN_W * 0.3,
-            cardOverlayEnabled: false,
-            ...TransitionPresets.SlideFromRightIOS,
-          }}
-        />
+        <JsStack.Screen name="artist/[artistId]" options={slideOptions} />
+        <JsStack.Screen name="album/[albumId]" options={slideOptions} />
         <JsStack.Screen
           name="nowplaying"
-          options={{
-            presentation: "transparentModal",
-            gestureEnabled: true,
-            gestureDirection: "vertical",
-            cardOverlayEnabled: false,
-            ...TransitionPresets.ModalSlideFromBottomIOS,
+          options={() => {
+            const skip = getSkipAnimation();
+            clearSkipAnimation();
+            return {
+              gestureEnabled: true,
+              gestureDirection: "vertical",
+              cardOverlayEnabled: false,
+              ...(!animate || skip
+                ? { animationEnabled: false, cardStyleInterpolator: () => ({ cardStyle: {} }) }
+                : TransitionPresets.ModalSlideFromBottomIOS),
+            };
           }}
         />
       </JsStack>
