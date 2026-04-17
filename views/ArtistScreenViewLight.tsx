@@ -5,11 +5,13 @@ import {
   FlatList,
   TouchableOpacity,
 } from "react-native";
+import { router } from "expo-router";
 import { FontAwesome5 } from "@expo/vector-icons";
 import { StyledText } from "@/components/StyledText";
 import { AlbumArt } from "@/components/AlbumArt";
 import { ArtistScreenViewProps } from "@/views/ArtistScreenTypes";
 import { Album, Track } from "@/types/music";
+import { BackArrow } from "@/components/BackArrow";
 
 type ListItem =
   | { type: "header" }
@@ -67,6 +69,7 @@ export function ArtistScreenViewLight({
     if (item.type === "header") {
       return (
         <View style={[styles.header, { borderBottomColor: border }]}>
+          <BackArrow />
           <View style={styles.headerLeft}>
             <StyledText style={[styles.artistName, { color: fg }]} numberOfLines={1}>
               {artist.name}
@@ -104,7 +107,6 @@ export function ArtistScreenViewLight({
               {a.title}
             </StyledText>
           </View>
-          <FontAwesome5 name="chevron-right" size={12} color={fgMuted} solid />
         </TouchableOpacity>
       );
     }
@@ -164,21 +166,17 @@ const styles = StyleSheet.create({
     alignItems: "flex-end",
     justifyContent: "space-between",
     paddingHorizontal: 18,
-    paddingTop: 14,
-    paddingBottom: 8,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingVertical: 12,
   },
   headerLeft: { flex: 1, gap: 2 },
-  artistName: { fontSize: 16, fontWeight: "700", letterSpacing: -0.3 },
-  artistMeta: { fontSize: 8 },
-  headerIcons: { flexDirection: "row", gap: 16, paddingBottom: 2 },
+  artistName: { fontSize: 12, letterSpacing: -0.3 },
   sectionLabel: {
     paddingHorizontal: 18,
     paddingVertical: 5,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   sectionLabelText: {
-    fontSize: 10,
+    fontSize: 8,
     fontWeight: "600",
     letterSpacing: 1,
     textTransform: "uppercase",

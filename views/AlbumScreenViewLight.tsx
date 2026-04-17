@@ -10,6 +10,7 @@ import { StyledText } from "@/components/StyledText";
 import { TrackRow } from "@/components/TrackRow";
 import { AlbumScreenViewProps } from "@/views/AlbumScreenTypes";
 import { Track } from "@/types/music";
+import { BackArrow } from "@/components/BackArrow";
 
 type ListItem =
   | { type: "header" }
@@ -56,6 +57,7 @@ export function AlbumScreenViewLight({
     if (item.type === "header") {
       return (
         <View style={[styles.header, { borderBottomColor: border }]}>
+          <BackArrow />
           <View style={styles.headerInfo}>
             <StyledText style={[styles.albumTitle, { color: fg }]} numberOfLines={1}>
               {album.title}
@@ -123,15 +125,13 @@ const styles = StyleSheet.create({
   centered: { flex: 1, alignItems: "center", justifyContent: "center" },
   header: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-end",
+    justifyContent: "space-between",
     paddingHorizontal: 18,
     paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    gap: 12,
   },
   headerInfo: { flex: 1, gap: 2 },
-  albumTitle: { fontSize: 12, fontWeight: "700", letterSpacing: -0.3, marginBottom: -3 },
-  albumMeta: { fontSize: 8 },
+  albumTitle: { fontSize: 12, letterSpacing: -0.3 },
   headerIcons: { flexDirection: "row", gap: 16 },
   sectionLabel: {
     paddingHorizontal: 18,
@@ -139,7 +139,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   sectionLabelText: {
-    fontSize: 10,
+    fontSize: 8,
     fontWeight: "600",
     letterSpacing: 1,
     textTransform: "uppercase",

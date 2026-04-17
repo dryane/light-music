@@ -42,7 +42,7 @@ const ART_TTL_MS = 1000 * 60 * 60 * 24; // 24 hours
 const CONCURRENCY = 6;
 
 /** When true, only scans /Download/Persisted/Music/ (Light Phone target path). */
-const LIGHT_PHONE_MODE = true;
+const LIGHT_PHONE_MODE = false;
 const LIGHT_PHONE_MUSIC_PATH = "/Download/Persisted/Music/";
 
 // Set to true to save embedded cover art extracted from file metadata.

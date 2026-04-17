@@ -87,7 +87,6 @@ export function ArtistListViewLight({
                 {artist.name}
               </StyledText>
             </View>
-            <StyledText style={[styles.chevron, { color: fgMuted }]}>›</StyledText>
           </TouchableOpacity>
         )}
         contentContainerStyle={[
@@ -136,7 +135,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 18,
-    paddingVertical: 10,
+    paddingVertical: 12,
   },
   artistInfo: { flex: 1, gap: 0 },
   artistName: { fontSize: 16, marginBottom: 0 },

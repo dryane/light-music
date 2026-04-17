@@ -9,9 +9,10 @@ import { StyledText } from "@/components/StyledText";
 import { AlbumArt } from "@/components/AlbumArt";
 import { PlayPauseButton, SkipPrevButton, SkipNextButton } from "@/components/PlayerButtons";
 import { NowPlayingViewProps, fmt } from "@/views/NowPlayingTypes";
+import { BackArrow } from "@/components/BackArrow";
 
 const { width: SCREEN_W } = Dimensions.get("window");
-const ART_SIZE = SCREEN_W - 200;
+const ART_SIZE = SCREEN_W - 275;
 
 export function NowPlayingViewLight({
   theme,
@@ -50,67 +51,70 @@ export function NowPlayingViewLight({
         styles.root,
         {
           backgroundColor: bg,
-          paddingTop: insets.top + 12,
-          paddingBottom: insets.bottom + 16,
+          paddingTop: insets.top,
         },
       ]}
     >
-      <View style={styles.handleWrap}>
-        <View style={[styles.handle, { backgroundColor: fgDim }]} />
+      <View style={styles.header}>
+        <BackArrow />
       </View>
 
-      <Animated.View
-        style={[styles.artWrap, { transform: [{ translateX: artX }], opacity: artOpacity }]}
-        {...artPanHandlers}
-      >
-        <AlbumArt uri={activeTrack.artwork ?? null} size={ART_SIZE} radius={8} />
-      </Animated.View>
+      <View style={styles.container}>
 
-      <View style={styles.trackInfo}>
-        <StyledText style={[styles.trackTitle, { color: fg }]} numberOfLines={2}>
-          {activeTrack.title}
-        </StyledText>
-        <StyledText style={[styles.trackSub, { color: fgDim }]} numberOfLines={1}>
-          {activeTrack.artist}
-          {activeTrack.album && activeTrack.album !== "Unknown Album"
-            ? ` · ${activeTrack.album}`
-            : ""}
-        </StyledText>
-      </View>
-
-      <View style={styles.progressSection}>
-        <View
-          style={styles.seekHitArea}
-          onLayout={barLayoutHandler}
-          {...seekPanHandlers}
+        <Animated.View
+          style={[styles.artWrap, { transform: [{ translateX: artX }], opacity: artOpacity }]}
+          {...artPanHandlers}
         >
-          <View style={[styles.progressTrack, { backgroundColor: trackBg }]}>
+          <AlbumArt uri={activeTrack.artwork ?? null} size={ART_SIZE} radius={8} />
+        </Animated.View>
+
+        <View style={styles.trackInfo}>
+          <StyledText style={[styles.trackTitle, { color: fg }]} numberOfLines={2}>
+            {activeTrack.title}
+          </StyledText>
+          <StyledText style={[styles.trackSub, { color: fgDim }]} numberOfLines={1}>
+            {activeTrack.artist}
+            {activeTrack.album && activeTrack.album !== "Unknown Album"
+              ? ` · ${activeTrack.album}`
+              : ""}
+          </StyledText>
+        </View>
+
+        <View style={styles.progressSection}>
+          <View
+            style={styles.seekHitArea}
+            onLayout={barLayoutHandler}
+            {...seekPanHandlers}
+          >
+            <View style={[styles.progressTrack, { backgroundColor: trackBg }]}>
+              <Animated.View
+                style={[styles.progressFill, { backgroundColor: fg, width: fillWidth }]}
+              />
+            </View>
             <Animated.View
-              style={[styles.progressFill, { backgroundColor: fg, width: fillWidth }]}
+              style={[
+                styles.thumb,
+                {
+                  backgroundColor: fg,
+                  left: thumbLeft,
+                  transform: [{ scale: dragging ? 1.4 : 1 }],
+                },
+              ]}
             />
           </View>
-          <Animated.View
-            style={[
-              styles.thumb,
-              {
-                backgroundColor: fg,
-                left: thumbLeft,
-                transform: [{ scale: dragging ? 1.4 : 1 }],
-              },
-            ]}
-          />
+
+          <View style={styles.timeRow}>
+            <StyledText style={[styles.time, { color: fgDim }]}>{fmt(labelSecs)}</StyledText>
+            <StyledText style={[styles.time, { color: fgDim }]}>{fmt(duration)}</StyledText>
+          </View>
         </View>
 
-        <View style={styles.timeRow}>
-          <StyledText style={[styles.time, { color: fgDim }]}>{fmt(labelSecs)}</StyledText>
-          <StyledText style={[styles.time, { color: fgDim }]}>{fmt(duration)}</StyledText>
+        <View style={styles.controls}>
+          <SkipPrevButton onPress={onSkipPrev} color={fg} size={18} />
+          <PlayPauseButton isPlaying={isPlaying} onPress={onTogglePlayPause} color={fg} size={100} />
+          <SkipNextButton onPress={onSkipNext} color={fg} size={18} />
         </View>
-      </View>
 
-      <View style={styles.controls}>
-        <SkipPrevButton onPress={onSkipPrev} color={fg} size={18} />
-        <PlayPauseButton isPlaying={isPlaying} onPress={onTogglePlayPause} color={fg} size={100} />
-        <SkipNextButton onPress={onSkipNext} color={fg} size={18} />
       </View>
     </View>
   );
@@ -119,13 +123,22 @@ export function NowPlayingViewLight({
 const styles = StyleSheet.create({
   root: {
     flex: 1,
+  },
+  centered: { flex: 1, alignItems: "center", justifyContent: "center" },
+  header: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    justifyContent: "space-between",
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    marginTop:0.5,
+  },
+  container: {
+    flex: 1,
     paddingHorizontal: 32,
     justifyContent: "center",
     gap: 16,
   },
-  centered: { flex: 1, alignItems: "center", justifyContent: "center" },
-  handleWrap: { alignItems: "center", marginBottom: -8 },
-  handle: { width: 36, height: 4, borderRadius: 2, opacity: 0.3 },
   artWrap: { alignSelf: "center" },
   trackInfo: { gap: 4, marginBottom: -15 },
   trackTitle: { fontSize: 14, fontWeight: "700", lineHeight: 24, marginBottom: -6 },

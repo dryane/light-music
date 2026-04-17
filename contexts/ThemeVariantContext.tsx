@@ -29,7 +29,7 @@ export const ThemeVariantProvider = ({ children }: { children: ReactNode }) => {
   // ── DEV TOGGLE ────────────────────────────────────────────────────────────
   // Change this to "light" to preview the light theme while designing.
   // A proper selector UI will replace this once both themes are finalised.
-  const DEV_DEFAULT: ThemeVariant = "full";
+  const DEV_DEFAULT: ThemeVariant = "light";
   // ─────────────────────────────────────────────────────────────────────────
 
   const [variant, setVariant] = usePersistedState<ThemeVariant>(
