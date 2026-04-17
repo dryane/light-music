@@ -27,7 +27,7 @@ export function TrackRowLight({
         {isActive ? (
           <FontAwesome5
             name={isPlaying ? "pause" : "play"}
-            size={9}
+            size={8}
             color={fg}
             solid
             style={isPlaying ? undefined : styles.playOffset}
@@ -52,14 +52,21 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 10,
     paddingHorizontal: 18,
+    paddingVertical: 12,
     gap: 12,
   },
-  numWrap: { width: 18, alignItems: "center", justifyContent: "center" },
-  num: { fontSize: 9 },
+  numWrap: {
+    width: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: -5,
+    marginRight: -5,
+    marginTop:1,
+  },
+  num: { fontSize: 8 },
   playOffset: { marginLeft: 2 },
   info: { flex: 1 },
-  title: { fontSize: 11 },
-  duration: { fontSize: 9 },
+  title: { fontSize: 12, letterSpacing: -0.3 },
+  duration: { fontSize: 8,  },
 });

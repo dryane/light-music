@@ -87,16 +87,6 @@ export function NowPlayingViewFull({
               style={[styles.progressFill, { backgroundColor: fg, width: fillWidth }]}
             />
           </View>
-          <Animated.View
-            style={[
-              styles.thumb,
-              {
-                backgroundColor: fg,
-                left: thumbLeft,
-                transform: [{ scale: dragging ? 1.4 : 1 }],
-              },
-            ]}
-          />
         </View>
 
         <View style={styles.timeRow}>
@@ -140,7 +130,7 @@ const styles = StyleSheet.create({
     top: 10,
     marginLeft: -8,
   },
-  timeRow: { flexDirection: "row", justifyContent: "space-between", marginTop: -5 },
+  timeRow: { flexDirection: "row", justifyContent: "space-between", marginTop: -10 },
   time: { fontSize: 10 },
   controls: {
     flexDirection: "row",

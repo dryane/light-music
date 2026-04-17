@@ -189,7 +189,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   info: { flex: 1, gap: 2 },
-  rowTitle: { fontSize: 12, marginBottom: -3, letterSpacing: -0.3 },
+  rowTitle: { fontSize: 12, letterSpacing: -0.3 },
   rowMeta: { fontSize: 8 },
   listContent: {},
 });

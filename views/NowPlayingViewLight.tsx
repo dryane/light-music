@@ -91,16 +91,6 @@ export function NowPlayingViewLight({
                 style={[styles.progressFill, { backgroundColor: fg, width: fillWidth }]}
               />
             </View>
-            <Animated.View
-              style={[
-                styles.thumb,
-                {
-                  backgroundColor: fg,
-                  left: thumbLeft,
-                  transform: [{ scale: dragging ? 1.4 : 1 }],
-                },
-              ]}
-            />
           </View>
 
           <View style={styles.timeRow}>
@@ -147,15 +137,7 @@ const styles = StyleSheet.create({
   seekHitArea: { height: 36, justifyContent: "center", position: "relative" },
   progressTrack: { height: 3, borderRadius: 2, overflow: "hidden" },
   progressFill: { height: "100%", borderRadius: 2 },
-  thumb: {
-    position: "absolute",
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    top: 10,
-    marginLeft: -8,
-  },
-  timeRow: { flexDirection: "row", justifyContent: "space-between", marginTop: -5 },
+  timeRow: { flexDirection: "row", justifyContent: "space-between", marginTop: -10 },
   time: { fontSize: 10 },
   controls: {
     flexDirection: "row",
