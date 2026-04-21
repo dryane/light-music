@@ -21,6 +21,7 @@ import { ThemeVariantProvider } from "@/contexts/ThemeVariantContext";
 import { MiniPlayer } from "@/components/MiniPlayer";
 import { useTheme } from "@/hooks/useTheme";
 import { pushNowPlayingInstant, getSkipAnimation, clearSkipAnimation } from "@/hooks/useNowPlayingNav";
+import { useGeneral } from "@/styles/General";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -47,6 +48,7 @@ function AppShell() {
   const playbackState = usePlaybackState();
   const segments = useSegments();
   const appState = useRef(AppState.currentState);
+  const general = useGeneral();
 
   useEffect(() => {
     const sub = AppState.addEventListener("change", (nextState) => {
@@ -98,7 +100,7 @@ function AppShell() {
   };
 
   return (
-    <View style={[styles.root, { backgroundColor: bg }]}>
+    <View style={general.root}>
       <JsStack
         screenOptions={{
           headerShown: false,
@@ -156,7 +158,3 @@ export default function RootLayout() {
     </ThemeVariantProvider>
   );
 }
-
-const styles = StyleSheet.create({
-  root: { flex: 1 },
-});
