@@ -15,7 +15,7 @@ import { useGeneral } from "@/styles/General";
 import { n } from "@/utils/scaling"
 
 const { width: SCREEN_W } = Dimensions.get("window");
-const ART_SIZE = SCREEN_W - 200;
+const ART_SIZE = SCREEN_W - 175;
 
 export function NowPlayingViewFull({
   theme,
@@ -51,52 +51,51 @@ export function NowPlayingViewFull({
   }
 
   return (
-    <View
-      style={[ general.root, full.nowPlaying.container]}
-    >
+    <View style={general.root}>
       <View style={full.nowPlaying.handleWrap}>
         <View style={full.nowPlaying.handle} />
       </View>
-
-      <Animated.View
-        style={[full.nowPlaying.artWrap, { transform: [{ translateX: artX }], opacity: artOpacity }]}
-        {...artPanHandlers}
-      >
-        <AlbumArt uri={activeTrack.artwork ?? null} size={ART_SIZE} radius={8} />
-      </Animated.View>
-
-      <View style={general.nowPlaying.trackInfo}>
-        <StyledText style={general.nowPlaying.trackTitle} numberOfLines={2}>
-          {activeTrack.title}
-        </StyledText>
-        <MarqueeText style={general.nowPlaying.trackSub}>
-          {`${activeTrack.artist}${activeTrack.album && activeTrack.album !== "Unknown Album" ? ` · ${activeTrack.album}` : ""}`}
-        </MarqueeText>
-      </View>
-
-      <View style={general.nowPlaying.progressSection}>
-        <View
-          style={general.nowPlaying.seekHitArea}
-          onLayout={barLayoutHandler}
-          {...seekPanHandlers}
+      <View style={[general.verticalCentered, full.nowPlaying.container]}>
+        <Animated.View
+          style={[full.nowPlaying.artWrap, { transform: [{ translateX: artX }], opacity: artOpacity }]}
+          {...artPanHandlers}
         >
-          <View style={general.nowPlaying.progressTrack}>
-            <Animated.View
-              style={[general.nowPlaying.progressFill, { width: fillWidth }]}
-            />
+          <AlbumArt uri={activeTrack.artwork ?? null} size={ART_SIZE} radius={8} />
+        </Animated.View>
+
+        <View style={general.nowPlaying.trackInfo}>
+          <StyledText style={general.nowPlaying.trackTitle} numberOfLines={2}>
+            {activeTrack.title}
+          </StyledText>
+          <MarqueeText style={general.nowPlaying.trackSub}>
+            {`${activeTrack.artist}${activeTrack.album && activeTrack.album !== "Unknown Album" ? ` · ${activeTrack.album}` : ""}`}
+          </MarqueeText>
+        </View>
+
+        <View style={general.nowPlaying.progressSection}>
+          <View
+            style={general.nowPlaying.seekHitArea}
+            onLayout={barLayoutHandler}
+            {...seekPanHandlers}
+          >
+            <View style={general.nowPlaying.progressTrack}>
+              <Animated.View
+                style={[general.nowPlaying.progressFill, { width: fillWidth }]}
+              />
+            </View>
+          </View>
+
+          <View style={general.nowPlaying.timeRow}>
+            <StyledText style={[general.nowPlaying.time, { color: fgDim }]}>{fmt(labelSecs)}</StyledText>
+            <StyledText style={[general.nowPlaying.time, { color: fgDim }]}>{fmt(duration)}</StyledText>
           </View>
         </View>
 
-        <View style={general.nowPlaying.timeRow}>
-          <StyledText style={[general.nowPlaying.time, { color: fgDim }]}>{fmt(labelSecs)}</StyledText>
-          <StyledText style={[general.nowPlaying.time, { color: fgDim }]}>{fmt(duration)}</StyledText>
+        <View style={general.nowPlaying.controls}>
+          <SkipPrevButton onPress={onSkipPrev} color={fg} size={18} />
+          <PlayPauseButton isPlaying={isPlaying} onPress={onTogglePlayPause} color={fg} size={100} />
+          <SkipNextButton onPress={onSkipNext} color={fg} size={18} />
         </View>
-      </View>
-
-      <View style={general.nowPlaying.controls}>
-        <SkipPrevButton onPress={onSkipPrev} color={fg} size={18} />
-        <PlayPauseButton isPlaying={isPlaying} onPress={onTogglePlayPause} color={fg} size={100} />
-        <SkipNextButton onPress={onSkipNext} color={fg} size={18} />
       </View>
     </View>
   );

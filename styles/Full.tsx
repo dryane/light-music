@@ -133,7 +133,8 @@ export function useFull(): StyleSheet {
       },
       handleWrap: {
         alignItems: "center",
-        marginBottom: n(-4)
+        marginTop:n(8),
+        marginBottom: n(4)
       },
       handle: {
         width: n(36),
