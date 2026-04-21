@@ -8,6 +8,8 @@ import {
 import { StyledText } from "@/components/StyledText";
 import { ScanProgress } from "@/components/ScanProgress";
 import { ArtistListViewProps } from "@/views/ArtistListTypes";
+import { useLight } from "@/styles/Light";
+import { useGeneral } from "@/styles/General";
 
 export function ArtistListViewLight({
   theme,
@@ -22,25 +24,26 @@ export function ArtistListViewLight({
   onRequestPermission,
   onNavigateToArtist,
 }: ArtistListViewProps) {
-  const { fg, fgMuted, bg, sectionBg, border } = theme;
+  const light = useLight();
+  const general = useGeneral();
 
   if (!initialized) {
-    return <View style={[styles.root, { backgroundColor: bg }]} />;
+    return <View style={[light.root, light.bg]} />;
   }
 
   if (!permissionGranted) {
     return (
-      <View style={[styles.root, { backgroundColor: bg, paddingTop: insets.top }]}>
-        <View style={styles.centered}>
-          <StyledText style={[styles.h2, { color: fg }]}>Permission Required</StyledText>
-          <StyledText style={[styles.body, { color: fgMuted }]}>
+      <View style={general.root}>
+        <View style={general.centered}>
+          <StyledText style={[light.h2, general.color]}>Permission Required</StyledText>
+          <StyledText style={[light.body, general.colorMuted]}>
             Allow access to your audio files to browse your library.
           </StyledText>
           <TouchableOpacity
-            style={[styles.btn, { borderColor: fg }]}
+            style={light.btn}
             onPress={onRequestPermission}
           >
-            <StyledText style={[styles.btnText, { color: fg }]}>Grant Access</StyledText>
+            <StyledText style={light.btnText}>Grant Access</StyledText>
           </TouchableOpacity>
         </View>
       </View>
@@ -50,7 +53,7 @@ export function ArtistListViewLight({
   if (loading && scanProgress < 1) {
 
     return (
-      <View style={[styles.root, { backgroundColor: bg, paddingTop: insets.top }]}>
+      <View style={general.root}>
         <View style={StyleSheet.absoluteFill}>
           <ScanProgress progress={scanProgress} status={scanStatus} />
         </View>
@@ -60,17 +63,17 @@ export function ArtistListViewLight({
 
   if (error) {
     return (
-      <View style={[styles.root, { backgroundColor: bg, paddingTop: insets.top }]}>
-        <View style={styles.centered}>
-          <StyledText style={[styles.h2, { color: fg }]}>Something went wrong</StyledText>
-          <StyledText style={[styles.body, { color: fgMuted }]}>{error}</StyledText>
+      <View style={general.root}>
+        <View style={general.centered}>
+          <StyledText style={[light.h2, general.color]}>Something went wrong</StyledText>
+          <StyledText style={[light.body, general.colorMuted ]}>{error}</StyledText>
         </View>
       </View>
     );
   }
 
   return (
-    <View style={[styles.root, { backgroundColor: bg, paddingTop: insets.top }]}>
+    <View style={general.root}>
       <SectionList
         sections={sections}
         keyExtractor={(item) => item.id}
@@ -78,25 +81,24 @@ export function ArtistListViewLight({
         showsVerticalScrollIndicator={false}
         renderItem={({ item: artist }) => (
           <TouchableOpacity
-            style={[styles.artistRow]}
+            style={light.home.artistRow}
             onPress={() => onNavigateToArtist(artist)}
             activeOpacity={0.5}
           >
-            <View style={styles.artistInfo}>
-              <StyledText style={[styles.artistName, { color: fg }]} numberOfLines={1}>
+            <View style={light.home.artistInfo}>
+              <StyledText style={light.home.artistName} numberOfLines={1}>
                 {artist.name}
               </StyledText>
             </View>
           </TouchableOpacity>
         )}
         contentContainerStyle={[
-          styles.listContent,
           { paddingBottom: insets.bottom + 16 },
         ]}
         ListEmptyComponent={
-          <View style={styles.centered}>
-            <StyledText style={[styles.h2, { color: fg }]}>No Music Found</StyledText>
-            <StyledText style={[styles.body, { color: fgMuted }]}>
+          <View style={general.centered}>
+            <StyledText style={[light.h2, general.color]}>No Music Found</StyledText>
+            <StyledText style={[light.body, general.colorMuted]}>
               No audio files found on your device.
             </StyledText>
           </View>
@@ -105,41 +107,3 @@ export function ArtistListViewLight({
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  root: { flex: 1 },
-  centered: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 14,
-    padding: 36,
-    minHeight: 300,
-  },
-  h2: { fontSize: 19, fontWeight: "600", textAlign: "center" },
-  body: { fontSize: 14, textAlign: "center", lineHeight: 20 },
-  btn: { borderWidth: 1, paddingHorizontal: 28, paddingVertical: 10 },
-  btnText: { fontSize: 15 },
-  sectionHeader: {
-    paddingHorizontal: 18,
-    paddingVertical: 3,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  sectionTitle: {
-    fontSize: 10,
-    fontWeight: "600",
-    letterSpacing: 1.2,
-    textTransform: "uppercase",
-  },
-  artistRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-  },
-  artistInfo: { flex: 1, gap: 0 },
-  artistName: { fontSize: 16, marginBottom: 0 },
-  artistMeta: { fontSize: 8 },
-  chevron: { fontSize: 18 },
-  listContent: {},
-});

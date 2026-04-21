@@ -12,6 +12,8 @@ import { AlbumArt } from "@/components/AlbumArt";
 import { ArtistScreenViewProps } from "@/views/ArtistScreenTypes";
 import { Album, Track } from "@/types/music";
 import { BackArrow } from "@/components/BackArrow";
+import { useLight } from "@/styles/Light";
+import { useGeneral } from "@/styles/General";
 
 type ListItem =
   | { type: "header" }
@@ -33,17 +35,14 @@ export function ArtistScreenViewLight({
   onPlaySingle,
 }: ArtistScreenViewProps) {
   const { fg, fgMuted, bg, border, sectionBg } = theme;
+  const light = useLight();
+  const general = useGeneral();
 
   if (!artist) {
     return (
-      <View
-        style={[
-          styles.root,
-          { backgroundColor: bg, paddingTop: insets.top },
-        ]}
-      >
-        <View style={styles.centered}>
-          <StyledText style={{ color: fgMuted }}>Artist not found.</StyledText>
+      <View style={general.root}>
+        <View style={general.centered}>
+          <StyledText style={general.colorMuted}>Artist not found.</StyledText>
         </View>
       </View>
     );
@@ -67,27 +66,22 @@ export function ArtistScreenViewLight({
 
   const renderItem = ({ item }: { item: ListItem }) => {
     if (item.type === "header") {
-      return (
-        <View style={[styles.header, { borderBottomColor: border }]}>
-          <BackArrow />
-          <View style={styles.headerLeft}>
-            <StyledText style={[styles.artistName, { color: fg }]} numberOfLines={1}>
-              {artist.name}
-            </StyledText>
-          </View>
-        </View>
-      );
+//       return (
+//         <View style={light.header}>
+//           <BackArrow />
+//           <View style={general.flexLeft}>
+//             <StyledText style={general.copy} numberOfLines={1}>
+//               {artist.name}
+//             </StyledText>
+//           </View>
+//         </View>
+//       );
     }
 
     if (item.type === "albumsHeader" || item.type === "singlesHeader") {
       return (
-        <View
-          style={[
-            styles.sectionLabel,
-            { backgroundColor: sectionBg, borderBottomColor: border },
-          ]}
-        >
-          <StyledText style={[styles.sectionLabelText, { color: fgMuted }]}>
+        <View style={light.stickyHeader}>
+          <StyledText style={light.stickyHeaderText}>
             {item.type === "albumsHeader" ? "ALBUMS" : "SINGLES"}
           </StyledText>
         </View>
@@ -98,12 +92,12 @@ export function ArtistScreenViewLight({
       const a = item.album;
       return (
         <TouchableOpacity
-          style={[styles.row, { borderBottomColor: border }]}
+          style={light.artist.albumRow}
           onPress={() => onNavigateToAlbum(a.id)}
           activeOpacity={0.5}
         >
-          <View style={styles.info}>
-            <StyledText style={[styles.rowTitle, { color: fg }]} numberOfLines={1}>
+          <View>
+            <StyledText style={general.copy} numberOfLines={1}>
               {a.title}
             </StyledText>
           </View>
@@ -115,12 +109,12 @@ export function ArtistScreenViewLight({
       const t = item.track;
       return (
         <TouchableOpacity
-          style={[styles.row, { borderBottomColor: border }]}
+          style={light.artist.albumRow}
           onPress={() => onPlaySingle(t)}
           activeOpacity={0.5}
         >
-          <View style={styles.info}>
-            <StyledText style={[styles.rowTitle, { color: fg }]} numberOfLines={1}>
+          <View>
+            <StyledText style={general.copy} numberOfLines={1}>
               {t.title}
             </StyledText>
           </View>
@@ -132,12 +126,15 @@ export function ArtistScreenViewLight({
   };
 
   return (
-    <View
-      style={[
-        styles.root,
-        { backgroundColor: bg, paddingTop: insets.top },
-      ]}
-    >
+    <View style={general.root}>
+      <View style={light.header}>
+        <BackArrow />
+        <View style={general.flexLeft}>
+          <StyledText style={general.copy} numberOfLines={1}>
+            {artist.name}
+          </StyledText>
+        </View>
+      </View>
       <FlatList
         data={listData}
         stickyHeaderIndices={stickyIndices}
@@ -150,46 +147,9 @@ export function ArtistScreenViewLight({
         renderItem={renderItem}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[
-          styles.listContent,
           { paddingBottom: insets.bottom + 16 },
         ]}
       />
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  root: { flex: 1 },
-  centered: { flex: 1, alignItems: "center", justifyContent: "center" },
-  header: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    justifyContent: "space-between",
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-  },
-  headerLeft: { flex: 1, gap: 2 },
-  artistName: { fontSize: 12, letterSpacing: -0.3 },
-  sectionLabel: {
-    paddingHorizontal: 18,
-    paddingVertical: 5,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  sectionLabelText: {
-    fontSize: 8,
-    fontWeight: "600",
-    letterSpacing: 1,
-    textTransform: "uppercase",
-  },
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    gap: 12,
-  },
-  info: { flex: 1, gap: 2 },
-  rowTitle: { fontSize: 12, letterSpacing: -0.3 },
-  rowMeta: { fontSize: 8 },
-  listContent: {},
-});

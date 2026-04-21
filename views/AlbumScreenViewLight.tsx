@@ -11,6 +11,8 @@ import { TrackRow } from "@/components/TrackRow";
 import { AlbumScreenViewProps } from "@/views/AlbumScreenTypes";
 import { Track } from "@/types/music";
 import { BackArrow } from "@/components/BackArrow";
+import { useLight } from "@/styles/Light";
+import { useGeneral } from "@/styles/General";
 
 type ListItem =
   | { type: "header" }
@@ -27,17 +29,14 @@ export function AlbumScreenViewLight({
   onShuffleAlbum,
 }: AlbumScreenViewProps) {
   const { fg, fgMuted, bg, border, sectionBg } = theme;
+  const light = useLight();
+  const general = useGeneral();
 
   if (!album) {
     return (
-      <View
-        style={[
-          styles.root,
-          { backgroundColor: bg, paddingTop: insets.top },
-        ]}
-      >
-        <View style={styles.centered}>
-          <StyledText style={{ color: fgMuted }}>Album not found.</StyledText>
+      <View style={general.root}>
+        <View style={general.centered}>
+          <StyledText style={general.copy}>Album not found.</StyledText>
         </View>
       </View>
     );
@@ -55,27 +54,22 @@ export function AlbumScreenViewLight({
 
   const renderItem = ({ item }: { item: ListItem }) => {
     if (item.type === "header") {
-      return (
-        <View style={[styles.header, { borderBottomColor: border }]}>
-          <BackArrow />
-          <View style={styles.headerInfo}>
-            <StyledText style={[styles.albumTitle, { color: fg }]} numberOfLines={1}>
-              {album.title}
-            </StyledText>
-          </View>
-        </View>
-      );
+//       return (
+//         <View style={light.header}>
+//           <BackArrow />
+//           <View style={general.flexLeft}>
+//             <StyledText style={general.copy} numberOfLines={1}>
+//               {album.title}
+//             </StyledText>
+//           </View>
+//         </View>
+//       );
     }
 
     if (item.type === "tracksHeader") {
       return (
-        <View
-          style={[
-            styles.sectionLabel,
-            { backgroundColor: sectionBg, borderBottomColor: border },
-          ]}
-        >
-          <StyledText style={[styles.sectionLabelText, { color: fgMuted }]}>
+        <View style={light.stickyHeader}>
+          <StyledText style={light.stickyHeaderText}>
             TRACKS
           </StyledText>
         </View>
@@ -96,12 +90,15 @@ export function AlbumScreenViewLight({
   };
 
   return (
-    <View
-      style={[
-        styles.root,
-        { backgroundColor: bg, paddingTop: insets.top },
-      ]}
-    >
+    <View style={general.root}>
+      <View style={light.header}>
+        <BackArrow />
+        <View style={general.flexLeft}>
+          <StyledText style={general.copy} numberOfLines={1}>
+            {album.title}
+          </StyledText>
+        </View>
+      </View>
       <FlatList
         data={listData}
         keyExtractor={(item, index) => {
@@ -112,37 +109,9 @@ export function AlbumScreenViewLight({
         renderItem={renderItem}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[
-          styles.listContent,
           { paddingBottom: insets.bottom + 16 },
         ]}
       />
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  root: { flex: 1 },
-  centered: { flex: 1, alignItems: "center", justifyContent: "center" },
-  header: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    justifyContent: "space-between",
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-  },
-  headerInfo: { flex: 1, gap: 2 },
-  albumTitle: { fontSize: 12, letterSpacing: -0.3 },
-  headerIcons: { flexDirection: "row", gap: 16 },
-  sectionLabel: {
-    paddingHorizontal: 18,
-    paddingVertical: 5,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  sectionLabelText: {
-    fontSize: 8,
-    fontWeight: "600",
-    letterSpacing: 1,
-    textTransform: "uppercase",
-  },
-  listContent: {},
-});

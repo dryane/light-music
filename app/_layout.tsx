@@ -73,7 +73,7 @@ function AppShell() {
   const slideOptions = {
     gestureEnabled: true,
     gestureDirection: "horizontal" as const,
-    gestureResponseDistance: SCREEN_W * 0.3,
+    gestureResponseDistance: 75,
     cardOverlayEnabled: false,
     animationEnabled: animate,
     cardStyleInterpolator: animate

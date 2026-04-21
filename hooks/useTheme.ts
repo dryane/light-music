@@ -48,15 +48,15 @@ function fullTheme(inv: boolean): Omit<Theme, "variant" | "invertColors"> {
 
 function lightTheme(inv: boolean): Omit<Theme, "variant" | "invertColors"> {
   return {
-    fg:            inv ? "#1a1a1a" : "#f0f0f0",
+    fg:            inv ? "#000000" : "#ffffff",
     fgMuted:       inv ? "#aaaaaa" : "#666666",
     fgDim:         inv ? "#bbbbbb" : "#555555",
-    bg:            inv ? "#f8f8f8" : "#0d0d0d",
+    bg:            inv ? "#ffffff" : "#000000",
     sectionBg:     inv ? "#eeeeee" : "#141414",
     border:        inv ? "#dddddd" : "#222222",
     trackBg:       inv ? "#cccccc" : "#2a2a2a",
     progressBg:    inv ? "#dddddd" : "#333333",
-    placeholderBg: inv ? "#e0e0e0" : "#1a1a1a",
+    placeholderBg: inv ? "#e0e0e0" : "#000000",
     font: "PublicSans",
     animate:  false,
   };
