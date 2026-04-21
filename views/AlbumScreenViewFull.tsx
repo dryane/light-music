@@ -11,6 +11,10 @@ import { AlbumArt } from "@/components/AlbumArt";
 import { TrackRow } from "@/components/TrackRow";
 import { AlbumScreenViewProps } from "@/views/AlbumScreenTypes";
 import { Track } from "@/types/music";
+import { BackArrow } from "@/components/BackArrow";
+import { useFull } from "@/styles/Full";
+import { useGeneral } from "@/styles/General";
+import { n } from "@/utils/scaling"
 
 type ListItem =
   | { type: "header" }
@@ -27,17 +31,14 @@ export function AlbumScreenViewFull({
   onShuffleAlbum,
 }: AlbumScreenViewProps) {
   const { fg, fgMuted, bg, border, sectionBg } = theme;
+  const full = useFull();
+  const general = useGeneral();
 
   if (!album) {
     return (
-      <View
-        style={[
-          styles.root,
-          { backgroundColor: bg, paddingTop: insets.top },
-        ]}
-      >
-        <View style={styles.centered}>
-          <StyledText style={{ color: fgMuted }}>Album not found.</StyledText>
+      <View style={general.root}>
+        <View style={general.centered}>
+          <StyledText style={general.colorMuted}>Album not found.</StyledText>
         </View>
       </View>
     );
@@ -56,17 +57,17 @@ export function AlbumScreenViewFull({
   const renderItem = ({ item }: { item: ListItem }) => {
     if (item.type === "header") {
       return (
-        <View style={[styles.header, { borderBottomColor: border }]}>
-          <AlbumArt uri={album.albumArt} size={52} radius={4} loading={isArtLoading} />
-          <View style={styles.headerInfo}>
-            <StyledText style={[styles.albumTitle, { color: fg }]} numberOfLines={1}>
+        <View style={full.album.header}>
+          <AlbumArt uri={album.albumArt} size={46} radius={4} loading={isArtLoading} />
+          <View style={general.flexLeft}>
+            <StyledText style={full.album.albumTitle} numberOfLines={1}>
               {album.title}
             </StyledText>
-            <StyledText style={[styles.albumMeta, { color: fgMuted }]}>
+            <StyledText style={full.album.albumMeta}>
               {[album.year, `${tracks.length} songs`].filter(Boolean).join(" · ")}
             </StyledText>
           </View>
-          <View style={styles.headerIcons}>
+          <View style={full.album.headerIcons}>
             <TouchableOpacity onPress={onPlayAlbum} hitSlop={12}>
               <FontAwesome5 name="play" size={16} color={fg} solid />
             </TouchableOpacity>
@@ -80,13 +81,8 @@ export function AlbumScreenViewFull({
 
     if (item.type === "tracksHeader") {
       return (
-        <View
-          style={[
-            styles.sectionLabel,
-            { backgroundColor: sectionBg, borderBottomColor: border },
-          ]}
-        >
-          <StyledText style={[styles.sectionLabelText, { color: fgMuted }]}>
+        <View style={full.stickyHeader}>
+          <StyledText style={full.stickyHeaderText}>
             TRACKS
           </StyledText>
         </View>
@@ -107,12 +103,7 @@ export function AlbumScreenViewFull({
   };
 
   return (
-    <View
-      style={[
-        styles.root,
-        { backgroundColor: bg, paddingTop: insets.top },
-      ]}
-    >
+    <View style={general.root}>
       <FlatList
         data={listData}
         keyExtractor={(item, index) => {
@@ -123,39 +114,9 @@ export function AlbumScreenViewFull({
         renderItem={renderItem}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[
-          styles.listContent,
           { paddingBottom: insets.bottom + 16 },
         ]}
       />
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  root: { flex: 1 },
-  centered: { flex: 1, alignItems: "center", justifyContent: "center" },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    gap: 12,
-  },
-  headerInfo: { flex: 1, gap: 2 },
-  albumTitle: { fontSize: 12, fontWeight: "700", letterSpacing: -0.3, marginBottom: -3 },
-  albumMeta: { fontSize: 8 },
-  headerIcons: { flexDirection: "row", gap: 16 },
-  sectionLabel: {
-    paddingHorizontal: 18,
-    paddingVertical: 5,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  sectionLabelText: {
-    fontSize: 10,
-    fontWeight: "600",
-    letterSpacing: 1,
-    textTransform: "uppercase",
-  },
-  listContent: {},
-});

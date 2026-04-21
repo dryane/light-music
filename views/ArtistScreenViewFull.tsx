@@ -10,6 +10,10 @@ import { StyledText } from "@/components/StyledText";
 import { AlbumArt } from "@/components/AlbumArt";
 import { ArtistScreenViewProps } from "@/views/ArtistScreenTypes";
 import { Album, Track } from "@/types/music";
+import { BackArrow } from "@/components/BackArrow";
+import { useFull } from "@/styles/Full";
+import { useGeneral } from "@/styles/General";
+import { n } from "@/utils/scaling"
 
 type ListItem =
   | { type: "header" }
@@ -31,17 +35,14 @@ export function ArtistScreenViewFull({
   onPlaySingle,
 }: ArtistScreenViewProps) {
   const { fg, fgMuted, bg, border, sectionBg } = theme;
+  const full = useFull();
+  const general = useGeneral();
 
   if (!artist) {
     return (
-      <View
-        style={[
-          styles.root,
-          { backgroundColor: bg, paddingTop: insets.top },
-        ]}
-      >
-        <View style={styles.centered}>
-          <StyledText style={{ color: fgMuted }}>Artist not found.</StyledText>
+      <View style={general.root}>
+        <View style={general.centered}>
+          <StyledText style={general.colorMuted}>Artist not found.</StyledText>
         </View>
       </View>
     );
@@ -66,12 +67,12 @@ export function ArtistScreenViewFull({
   const renderItem = ({ item }: { item: ListItem }) => {
     if (item.type === "header") {
       return (
-        <View style={[styles.header, { borderBottomColor: border }]}>
-          <View style={styles.headerLeft}>
-            <StyledText style={[styles.artistName, { color: fg }]} numberOfLines={1}>
+        <View style={full.artist.header}>
+          <View style={general.flexLeft}>
+            <StyledText style={full.artist.artistName} numberOfLines={1}>
               {artist.name}
             </StyledText>
-            <StyledText style={[styles.artistMeta, { color: fgMuted }]}>
+            <StyledText style={full.artist.artistMeta}>
               {albums.length > 0
                 ? `${albums.length} ${albums.length === 1 ? "album" : "albums"} · `
                 : ""}
@@ -81,12 +82,12 @@ export function ArtistScreenViewFull({
               {allTracks.length} songs
             </StyledText>
           </View>
-          <View style={styles.headerIcons}>
+          <View style={full.artist.headerIcons}>
             <TouchableOpacity onPress={onPlayAll} hitSlop={12}>
-              <FontAwesome5 name="play" size={16} color={fg} solid />
+              <FontAwesome5 name="play" size={n(16)} color={fg} solid />
             </TouchableOpacity>
             <TouchableOpacity onPress={onShuffle} hitSlop={12}>
-              <FontAwesome5 name="random" size={16} color={fgMuted} solid />
+              <FontAwesome5 name="random" size={n(16)} color={fgMuted} solid />
             </TouchableOpacity>
           </View>
         </View>
@@ -95,13 +96,8 @@ export function ArtistScreenViewFull({
 
     if (item.type === "albumsHeader" || item.type === "singlesHeader") {
       return (
-        <View
-          style={[
-            styles.sectionLabel,
-            { backgroundColor: sectionBg, borderBottomColor: border },
-          ]}
-        >
-          <StyledText style={[styles.sectionLabelText, { color: fgMuted }]}>
+        <View style={full.stickyHeader}>
+          <StyledText style={full.stickyHeaderText}>
             {item.type === "albumsHeader" ? "ALBUMS" : "SINGLES"}
           </StyledText>
         </View>
@@ -112,20 +108,20 @@ export function ArtistScreenViewFull({
       const a = item.album;
       return (
         <TouchableOpacity
-          style={[styles.row, { borderBottomColor: border }]}
+          style={full.artist.albumRow}
           onPress={() => onNavigateToAlbum(a.id)}
           activeOpacity={0.5}
         >
           <AlbumArt uri={a.albumArt} size={52} radius={4} />
-          <View style={styles.info}>
-            <StyledText style={[styles.rowTitle, { color: fg }]} numberOfLines={1}>
+          <View style={general.flexLeft}>
+            <StyledText style={full.artist.rowTitle} numberOfLines={1}>
               {a.title}
             </StyledText>
-            <StyledText style={[styles.rowMeta, { color: fgMuted }]}>
+            <StyledText style={full.artist.rowMeta}>
               {[a.year, `${a.tracks.length} songs`].filter(Boolean).join(" · ")}
             </StyledText>
           </View>
-          <FontAwesome5 name="chevron-right" size={12} color={fgMuted} solid />
+          <FontAwesome5 name="chevron-right" size={n(12)} color={fgMuted} solid />
         </TouchableOpacity>
       );
     }
@@ -134,17 +130,17 @@ export function ArtistScreenViewFull({
       const t = item.track;
       return (
         <TouchableOpacity
-          style={[styles.row, { borderBottomColor: border }]}
+          style={full.artist.albumRow}
           onPress={() => onPlaySingle(t)}
           activeOpacity={0.5}
         >
           <AlbumArt uri={t.albumArt} size={52} radius={4} />
-          <View style={styles.info}>
-            <StyledText style={[styles.rowTitle, { color: fg }]} numberOfLines={1}>
+          <View style={general.flexLeft}>
+            <StyledText style={full.artist.rowTitle} numberOfLines={1}>
               {t.title}
             </StyledText>
             {t.year && (
-              <StyledText style={[styles.rowMeta, { color: fgMuted }]}>
+              <StyledText style={full.artist.rowMeta}>
                 {t.year}
               </StyledText>
             )}
@@ -157,12 +153,7 @@ export function ArtistScreenViewFull({
   };
 
   return (
-    <View
-      style={[
-        styles.root,
-        { backgroundColor: bg, paddingTop: insets.top },
-      ]}
-    >
+    <View style={general.root}>
       <FlatList
         data={listData}
         stickyHeaderIndices={stickyIndices}
@@ -175,51 +166,9 @@ export function ArtistScreenViewFull({
         renderItem={renderItem}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[
-          styles.listContent,
           { paddingBottom: insets.bottom + 16 },
         ]}
       />
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  root: { flex: 1 },
-  centered: { flex: 1, alignItems: "center", justifyContent: "center" },
-  header: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    justifyContent: "space-between",
-    paddingHorizontal: 18,
-    paddingTop: 14,
-    paddingBottom: 8,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  headerLeft: { flex: 1, gap: 2 },
-  artistName: { fontSize: 16, fontWeight: "700", letterSpacing: -0.3 },
-  artistMeta: { fontSize: 8 },
-  headerIcons: { flexDirection: "row", gap: 16, paddingBottom: 2 },
-  sectionLabel: {
-    paddingHorizontal: 18,
-    paddingVertical: 5,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  sectionLabelText: {
-    fontSize: 10,
-    fontWeight: "600",
-    letterSpacing: 1,
-    textTransform: "uppercase",
-  },
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 18,
-    paddingVertical: 2,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    gap: 12,
-  },
-  info: { flex: 1, gap: 2 },
-  rowTitle: { fontSize: 12, fontWeight: "700", marginBottom: -3, letterSpacing: -0.3 },
-  rowMeta: { fontSize: 8 },
-  listContent: {},
-});

@@ -4,6 +4,10 @@ import { FontAwesome5 } from "@expo/vector-icons";
 import { StyledText } from "@/components/StyledText";
 import { AlbumArt } from "@/components/AlbumArt";
 import { MiniPlayerViewProps } from "@/components/mini-player/types";
+import { useFull } from "@/styles/Full";
+import { useGeneral } from "@/styles/General";
+import { n } from "@/utils/scaling"
+
 
 export function MiniPlayerFull({
   activeTrack,
@@ -18,20 +22,22 @@ export function MiniPlayerFull({
   hasArtwork,
 }: MiniPlayerViewProps) {
   const { fg, fgMuted, bg, border, progressBg } = theme;
+  const full = useFull();
+  const general = useGeneral();
 
   return (
     <Animated.View style={{ transform: [{ translateY: slideAnim }] }}>
       {/* Thin progress bar along top edge */}
-      <View style={[styles.progressBar, { backgroundColor: progressBg }]}>
+      <View style={general.miniPlayer.progressBar}>
         <View
           style={[
-            styles.progressFill,
-            { backgroundColor: fg, width: `${progressRatio * 100}%` },
+            general.miniPlayer.progressFill,
+            { width: `${progressRatio * 100}%` },
           ]}
         />
       </View>
 
-      <View style={[styles.container, { backgroundColor: bg, borderTopColor: border }]}>
+      <View style={ general.miniPlayer.container }>
         <TouchableOpacity
           onPress={onNavigate}
           activeOpacity={1}
@@ -40,63 +46,45 @@ export function MiniPlayerFull({
           <AlbumArt uri={activeTrack.artwork ?? null} size={34} radius={4} />
         </TouchableOpacity>
 
-        <Pressable style={styles.info} onPress={onNavigate}>
-          <StyledText style={[styles.title, { color: fg }]} numberOfLines={1}>
+        <Pressable style={general.miniPlayer.info} onPress={onNavigate}>
+          <StyledText style={general.miniPlayer.title} numberOfLines={1}>
             {activeTrack.title}
           </StyledText>
-          <StyledText style={[styles.artist, { color: fgMuted }]} numberOfLines={1}>
+          <StyledText style={general.miniPlayer.artist} numberOfLines={1}>
             {activeTrack.artist}
           </StyledText>
         </Pressable>
 
         <TouchableOpacity
           onPress={onStop}
-          hitSlop={12}
-          style={styles.btn}
+          hitSlop={n(12)}
+          style={general.miniPlayer.btn}
         >
-          <FontAwesome5 name="stop" size={16} color={fgMuted} solid />
+          <FontAwesome5 name="stop" size={n(18)} color={fgMuted} solid />
         </TouchableOpacity>
 
         <TouchableOpacity
           onPress={onTogglePlay}
-          hitSlop={12}
-          style={styles.btn}
+          hitSlop={n(12)}
+          style={general.miniPlayer.btn}
         >
           <FontAwesome5
             name={isPlaying ? "pause" : "play"}
-            size={18}
+            size={n(18)}
             color={fg}
             solid
-            style={isPlaying ? undefined : { marginLeft: 2 }}
+            style={{marginRight: n(-2)}}
           />
         </TouchableOpacity>
 
         <TouchableOpacity
           onPress={onSkipNext}
-          hitSlop={12}
-          style={styles.btn}
+          hitSlop={n(12)}
+          style={general.miniPlayer.btn}
         >
-          <FontAwesome5 name="step-forward" size={18} color={fg} solid />
+          <FontAwesome5 name="step-forward" size={n(18)} color={fg} solid />
         </TouchableOpacity>
       </View>
     </Animated.View>
   );
 }
-
-const styles = StyleSheet.create({
-  progressBar: { height: 1.5, width: "100%" },
-  progressFill: { height: "100%" },
-  container: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingRight: 14,
-    paddingLeft: 18,
-    paddingVertical: 9,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    gap: 11,
-  },
-  info: { flex: 1, gap: 1 },
-  title: { fontSize: 10, marginBottom: -3, fontWeight: "500" },
-  artist: { fontSize: 8 },
-  btn: { padding: 4 },
-});

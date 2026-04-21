@@ -56,7 +56,7 @@ export function useLight(): StyleSheet {
     },
     nowPlaying: {
       container: {
-        paddingHorizontal: n(18),
+        paddingHorizontal: n(20),
         gap: n(15),
       }
     },

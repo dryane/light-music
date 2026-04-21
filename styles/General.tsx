@@ -66,7 +66,8 @@ export function useGeneral(): StyleSheet {
       },
       trackSub: {
         fontSize: n(10),
-        color: fgDim
+        color: fgDim,
+        marginBottom: n(-2),
       },
       progressSection: {
         gap: n(8),
